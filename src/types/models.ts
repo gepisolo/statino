@@ -10,6 +10,9 @@ export interface Project {
   id: string;
   clientId: string;
   name: string;
+  // Inactive projects are hidden from the entry editor's dropdown.
+  // Docs created before this field existed don't have it: missing = active.
+  active?: boolean;
 }
 
 // One contract per (client, activity): the same client can pay different

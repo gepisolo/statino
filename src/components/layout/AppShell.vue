@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed } from 'vue';
 import { RouterLink, RouterView, useRoute } from 'vue-router';
-import { CalendarDays, Users, FolderKanban, FileText, LogOut, UserPlus } from '@lucide/vue';
+import { CalendarDays, Users, FileText, LogOut, UserPlus } from '@lucide/vue';
 import { useAuthStore } from '@/stores/auth';
 import { cn } from '@/lib/utils';
 
@@ -11,10 +11,13 @@ const route = useRoute();
 const nav = computed(() => [
   { name: 'statino', label: 'Statino', to: '/', icon: CalendarDays },
   { name: 'clients', label: 'Clienti', to: '/clients', icon: Users },
-  { name: 'projects', label: 'Progetti', to: '/projects', icon: FolderKanban },
   { name: 'contracts', label: 'Contratti', to: '/contracts', icon: FileText },
   ...(auth.isAdmin ? [{ name: 'users', label: 'Utenti', to: '/users', icon: UserPlus }] : []),
 ]);
+
+// Routes reached from a nav section (e.g. a client's projects) set
+// meta.nav to keep that section highlighted.
+const activeNav = computed(() => (route.meta.nav as string | undefined) ?? route.name);
 
 const appEnv = import.meta.env.VITE_APP_ENV || 'production';
 const appVersion = __APP_VERSION__;
@@ -39,7 +42,7 @@ async function onLogout() {
           :class="
             cn(
               'flex items-center gap-2 rounded-md px-3 py-2 text-sm font-medium transition-colors',
-              route.name === item.name
+              activeNav === item.name
                 ? 'bg-sidebar-accent text-sidebar-accent-foreground'
                 : 'text-sidebar-foreground/70 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground',
             )

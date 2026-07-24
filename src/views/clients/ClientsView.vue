@@ -1,7 +1,8 @@
 <script setup lang="ts">
 import { onMounted, ref } from 'vue';
+import { useRouter } from 'vue-router';
 import { toast } from 'vue-sonner';
-import { MoreHorizontal, Pencil, Plus, Trash2 } from '@lucide/vue';
+import { FolderKanban, MoreHorizontal, Pencil, Plus, Trash2 } from '@lucide/vue';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import {
@@ -32,6 +33,7 @@ import { useAuthStore } from '@/stores/auth';
 import type { Client } from '@/types/models';
 
 const auth = useAuthStore();
+const router = useRouter();
 
 const loading = ref(true);
 const clients = ref<Client[]>([]);
@@ -140,6 +142,12 @@ async function confirmDelete() {
                 </Button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end">
+                <DropdownMenuItem
+                  @select="router.push({ name: 'client-projects', params: { clientId: c.id } })"
+                >
+                  <FolderKanban class="mr-2 size-4" />
+                  Progetti
+                </DropdownMenuItem>
                 <DropdownMenuItem @select="openEdit(c)">
                   <Pencil class="mr-2 size-4" />
                   Modifica

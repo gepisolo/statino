@@ -15,6 +15,12 @@ data on Firestore. UI language: Italian.
   + `/unauthorized` screen.
 - Registries (v0.3.0–0.4.0): clients, contracts (client filter, state
   badge attivo/futuro/scaduto), projects — all CRUD with form dialogs.
+- Projects nested under clients (v0.7.0): no sidebar entry; reached from
+  the client row's ⋯ menu → `/clients/:clientId/projects` (route name
+  `client-projects`, `meta.nav: 'clients'` keeps the sidebar highlight).
+  New `active` flag (row switch; missing = active for pre-existing docs):
+  inactive projects are hidden in the entry editor's dropdown, except the
+  one already on the entry being edited.
 - Statino view (v0.5.0): year/month/client selectors (last client
   persisted in localStorage), month grid with weekends highlighted +
   TOTALE row, multiple entries per day (contract active on that day,
@@ -85,8 +91,8 @@ npm run format       # prettier --write
 ## Domain model (`src/types/models.ts`)
 
 - `users/{uid}/clients` — `{ name }`
-- `users/{uid}/projects` — `{ clientId, name }` (some clients want hours
-  split by project)
+- `users/{uid}/projects` — `{ clientId, name, active? }` (some clients
+  want hours split by project; `active` missing = active)
 - `users/{uid}/contracts` — `{ clientId, activity, startDate, endDate,
   annualHours, hourlyRate }`. One doc per (client, activity): the same
   client can pay different rates for different activities. `annualHours`

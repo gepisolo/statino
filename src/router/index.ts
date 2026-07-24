@@ -31,9 +31,12 @@ export const router = createRouter({
           component: () => import('@/views/clients/ClientsView.vue'),
         },
         {
-          path: 'projects',
-          name: 'projects',
+          path: 'clients/:clientId/projects',
+          name: 'client-projects',
+          // Highlight "Clienti" in the sidebar: projects are reached from there.
+          meta: { nav: 'clients' },
           component: () => import('@/views/projects/ProjectsView.vue'),
+          props: true,
         },
         {
           path: 'contracts',

@@ -63,6 +63,14 @@ const entryDate = computed(() =>
 const title = computed(() => (props.mode === 'create' ? 'Nuova attività' : 'Modifica attività'));
 const ctaLabel = computed(() => (props.mode === 'create' ? 'Aggiungi' : 'Salva modifiche'));
 
+// Inactive projects are hidden, but the one already on the entry being
+// edited stays selectable.
+const selectableProjects = computed(() =>
+  props.projects.filter(
+    (p) => p.active !== false || (props.mode === 'edit' && props.entry?.projectId === p.id),
+  ),
+);
+
 const hoursNum = computed(() => Number(hours.value));
 const valid = computed(
   () =>
@@ -168,7 +176,7 @@ function handleOpenChange(v: boolean) {
             </SelectTrigger>
             <SelectContent>
               <SelectItem :value="NO_PROJECT">Nessun progetto</SelectItem>
-              <SelectItem v-for="p in projects" :key="p.id" :value="p.id">
+              <SelectItem v-for="p in selectableProjects" :key="p.id" :value="p.id">
                 {{ p.name }}
               </SelectItem>
             </SelectContent>
