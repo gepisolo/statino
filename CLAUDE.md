@@ -37,6 +37,12 @@ data on Firestore. UI language: Italian.
   invoice doc.
 - Historical data imported (2026-07-24): Jan–Jul 2026 from the owner's
   Google Sheet, 211 entries (4books 450h, Pull the rabbit 294h).
+- Settings (v0.9.0): `/settings` page with tabs "Dati fiscali" (one row
+  per year: regime ordinario/forfettario + profitability index % when
+  forfettario) and "Aliquote fiscali" (rows per year: type
+  contributi/tasse, name, rate %, fromIncome/toIncome € brackets,
+  toIncome null = no cap). Groundwork for future net-income calcs — no
+  consumer of this data yet. New `ui/tabs` component.
 
 **Not yet done / next**:
 
@@ -114,6 +120,10 @@ npm run format       # prettier --write
   billed and locked (missing = not invoiced).
 - `users/{uid}/invoices` — `{ clientId, number, dateFrom, dateTo, hours,
   amount }`; hours/amount frozen at creation.
+- `users/{uid}/fiscalYears` — `{ year, regime: 'ordinario'|'forfettario',
+  profitabilityIndex|null }` (one per year, uniqueness enforced in UI).
+- `users/{uid}/taxRates` — `{ year, type: 'contributi'|'tasse', name,
+  rate, fromIncome, toIncome|null }` (bracket rows, many per year).
 
 ## Statino view (the core screen)
 

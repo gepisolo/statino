@@ -46,6 +46,31 @@ export interface Entry {
   invoiceId?: string | null;
 }
 
+// Fiscal profile of a calendar year (one doc per year). The
+// profitability index (indice di redditività, %) only applies to the
+// forfettario regime — null otherwise.
+export type FiscalRegime = 'ordinario' | 'forfettario';
+export interface FiscalYear {
+  id: string;
+  year: number;
+  regime: FiscalRegime;
+  profitabilityIndex: number | null;
+}
+
+// A tax/contribution bracket: `rate` (%) applies to the taxable income
+// slice between `fromIncome` and `toIncome` (€, `toIncome` null = no
+// upper bound). Multiple rows per year.
+export type TaxRateType = 'contributi' | 'tasse';
+export interface TaxRate {
+  id: string;
+  year: number;
+  type: TaxRateType;
+  name: string;
+  rate: number;
+  fromIncome: number;
+  toIncome: number | null;
+}
+
 // An issued invoice: the entries of `clientId` dated within
 // [dateFrom, dateTo] that were not yet invoiced get locked with this
 // invoice's id. `hours`/`amount` are frozen at creation time.

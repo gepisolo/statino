@@ -49,6 +49,11 @@ export const router = createRouter({
           component: () => import('@/views/invoices/InvoicesView.vue'),
         },
         {
+          path: 'settings',
+          name: 'settings',
+          component: () => import('@/views/settings/SettingsView.vue'),
+        },
+        {
           path: 'users',
           name: 'users',
           meta: { admin: true },

@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed } from 'vue';
 import { RouterLink, RouterView, useRoute } from 'vue-router';
-import { CalendarDays, Users, FileText, Receipt, LogOut, UserPlus } from '@lucide/vue';
+import { CalendarDays, Users, FileText, Receipt, Settings, LogOut, UserPlus } from '@lucide/vue';
 import { useAuthStore } from '@/stores/auth';
 import { cn } from '@/lib/utils';
 
@@ -13,6 +13,7 @@ const nav = computed(() => [
   { name: 'clients', label: 'Clienti', to: '/clients', icon: Users },
   { name: 'contracts', label: 'Contratti', to: '/contracts', icon: FileText },
   { name: 'invoices', label: 'Fatture', to: '/invoices', icon: Receipt },
+  { name: 'settings', label: 'Impostazioni', to: '/settings', icon: Settings },
   ...(auth.isAdmin ? [{ name: 'users', label: 'Utenti', to: '/users', icon: UserPlus }] : []),
 ]);
 

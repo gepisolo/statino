@@ -10,7 +10,15 @@ import {
   writeBatch,
 } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
-import type { Client, Contract, Entry, Invoice, Project } from '@/types/models';
+import type {
+  Client,
+  Contract,
+  Entry,
+  FiscalYear,
+  Invoice,
+  Project,
+  TaxRate,
+} from '@/types/models';
 
 // Thin typed CRUD helpers over the per-user subcollections
 // (users/{uid}/<name>). Views call these directly — the Firestore
@@ -100,6 +108,14 @@ export const invoicesRepo = {
     await batch.commit();
   },
 };
+
+export const fiscalYearsRepo = makeRepo<FiscalYear>('fiscalYears', (a, b) => b.year - a.year);
+
+// Newest year first, then brackets bottom-up.
+export const taxRatesRepo = makeRepo<TaxRate>(
+  'taxRates',
+  (a, b) => b.year - a.year || a.fromIncome - b.fromIncome,
+);
 
 export function extractErrorMessage(err: unknown): string {
   return err instanceof Error ? err.message : String(err);
