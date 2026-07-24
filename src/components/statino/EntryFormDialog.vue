@@ -60,6 +60,8 @@ const submitting = ref(false);
 const entryDate = computed(() =>
   props.mode === 'edit' && props.entry ? props.entry.date : props.date,
 );
+// A billed entry is locked: only the description can change.
+const locked = computed(() => props.mode === 'edit' && Boolean(props.entry?.invoiceId));
 const title = computed(() => (props.mode === 'create' ? 'Nuova attività' : 'Modifica attività'));
 const ctaLabel = computed(() => (props.mode === 'create' ? 'Aggiungi' : 'Salva modifiche'));
 
@@ -117,6 +119,7 @@ async function submit() {
       link: url,
       description: description.value.trim(),
       hours: hoursNum.value,
+      invoiceId: (props.mode === 'edit' && props.entry?.invoiceId) || null,
     };
     const saved =
       props.mode === 'create'
@@ -150,13 +153,14 @@ function handleOpenChange(v: boolean) {
         <DialogTitle>{{ title }}</DialogTitle>
         <DialogDescription>
           {{ weekdayName(entryDate) }} {{ formatDate(entryDate) }}
+          <template v-if="locked"> — fatturata, puoi modificare solo la descrizione</template>
         </DialogDescription>
       </DialogHeader>
 
       <form class="space-y-4" @submit.prevent="submit">
         <div class="space-y-2">
           <Label for="entry-contract">Contratto</Label>
-          <Select v-model="contractId" :disabled="submitting">
+          <Select v-model="contractId" :disabled="submitting || locked">
             <SelectTrigger id="entry-contract" class="w-full">
               <SelectValue placeholder="Seleziona il contratto" />
             </SelectTrigger>
@@ -170,7 +174,7 @@ function handleOpenChange(v: boolean) {
 
         <div class="space-y-2">
           <Label for="entry-project">Progetto</Label>
-          <Select v-model="projectId" :disabled="submitting">
+          <Select v-model="projectId" :disabled="submitting || locked">
             <SelectTrigger id="entry-project" class="w-full">
               <SelectValue placeholder="Nessun progetto" />
             </SelectTrigger>
@@ -191,7 +195,7 @@ function handleOpenChange(v: boolean) {
               v-model="ticket"
               type="text"
               placeholder="7592"
-              :disabled="submitting"
+              :disabled="submitting || locked"
               autocomplete="off"
             />
           </div>
@@ -204,7 +208,7 @@ function handleOpenChange(v: boolean) {
               min="0.25"
               step="0.25"
               placeholder="2"
-              :disabled="submitting"
+              :disabled="submitting || locked"
             />
           </div>
         </div>
@@ -216,7 +220,7 @@ function handleOpenChange(v: boolean) {
             v-model="link"
             type="text"
             placeholder="https://tracker.esempio.com/issues/7592"
-            :disabled="submitting"
+            :disabled="submitting || locked"
             autocomplete="off"
           />
         </div>

@@ -28,6 +28,16 @@ data on Firestore. UI language: Italian.
   month totals (hours + amount) and per-contract progress (annual, done
   in year up to selected month, in month, remaining).
 
+- Invoices (v0.8.0): `/invoices` page + sidebar entry. Creating an
+  invoice (client, number, dateFrom/dateTo) shows live hours+amount of
+  the period's not-yet-invoiced entries and, on save, locks them by
+  setting `entries.invoiceId` (atomic writeBatch). Locked entries: no
+  delete, only description editable (lock icon in the grid). Deleting an
+  invoice unlocks its entries. `hours`/`amount` are frozen on the
+  invoice doc.
+- Historical data imported (2026-07-24): Jan–Jul 2026 from the owner's
+  Google Sheet, 211 entries (4books 450h, Pull the rabbit 294h).
+
 **Not yet done / next**:
 
 - End-to-end test with real data by the owner — the whole flow after the
@@ -98,9 +108,12 @@ npm run format       # prettier --write
   client can pay different rates for different activities. `annualHours`
   is counted over the **calendar year** (anno solare).
 - `users/{uid}/entries` — one activity row per doc: `{ date (YYYY-MM-DD),
-  clientId, contractId, projectId|null, ticket, link, description, hours }`.
-  A day's total hours = sum of its entries; month/year totals come from
-  date-range queries.
+  clientId, contractId, projectId|null, ticket, link, description, hours,
+  invoiceId?|null }`. A day's total hours = sum of its entries;
+  month/year totals come from date-range queries. `invoiceId` set =
+  billed and locked (missing = not invoiced).
+- `users/{uid}/invoices` — `{ clientId, number, dateFrom, dateTo, hours,
+  amount }`; hours/amount frozen at creation.
 
 ## Statino view (the core screen)
 

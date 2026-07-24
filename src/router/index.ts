@@ -44,6 +44,11 @@ export const router = createRouter({
           component: () => import('@/views/contracts/ContractsView.vue'),
         },
         {
+          path: 'invoices',
+          name: 'invoices',
+          component: () => import('@/views/invoices/InvoicesView.vue'),
+        },
+        {
           path: 'users',
           name: 'users',
           meta: { admin: true },

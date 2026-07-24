@@ -7,9 +7,10 @@ import {
   query,
   setDoc,
   where,
+  writeBatch,
 } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
-import type { Client, Contract, Entry, Project } from '@/types/models';
+import type { Client, Contract, Entry, Invoice, Project } from '@/types/models';
 
 // Thin typed CRUD helpers over the per-user subcollections
 // (users/{uid}/<name>). Views call these directly — the Firestore
@@ -52,17 +53,51 @@ export const contractsRepo = makeRepo<Contract>('contracts', (a, b) =>
 // compute per-contract progress against the annual allowance.
 export const entriesRepo = {
   ...makeRepo<Entry>('entries', (a, b) => a.date.localeCompare(b.date)),
-  async listYear(uid: string, year: number): Promise<Entry[]> {
+  async listRange(uid: string, from: string, to: string): Promise<Entry[]> {
     const snap = await getDocs(
       query(
         collection(db, 'users', uid, 'entries'),
-        where('date', '>=', `${year}-01-01`),
-        where('date', '<=', `${year}-12-31`),
+        where('date', '>=', from),
+        where('date', '<=', to),
       ),
     );
     return snap.docs
       .map((d) => ({ id: d.id, ...d.data() }) as Entry)
       .sort((a, b) => a.date.localeCompare(b.date));
+  },
+  async listYear(uid: string, year: number): Promise<Entry[]> {
+    return this.listRange(uid, `${year}-01-01`, `${year}-12-31`);
+  },
+};
+
+// Creating an invoice locks the billed entries (sets their `invoiceId`);
+// deleting it unlocks them. Both run in a single atomic batch.
+export const invoicesRepo = {
+  ...makeRepo<Invoice>('invoices', (a, b) => b.dateFrom.localeCompare(a.dateFrom)),
+  async createWithEntries(
+    uid: string,
+    data: Omit<Invoice, 'id'>,
+    entryIds: string[],
+  ): Promise<Invoice> {
+    const batch = writeBatch(db);
+    const ref = doc(collection(db, 'users', uid, 'invoices'));
+    batch.set(ref, data);
+    for (const id of entryIds) {
+      batch.update(doc(db, 'users', uid, 'entries', id), { invoiceId: ref.id });
+    }
+    await batch.commit();
+    return { id: ref.id, ...data };
+  },
+  async removeWithEntries(uid: string, id: string): Promise<void> {
+    const snap = await getDocs(
+      query(collection(db, 'users', uid, 'entries'), where('invoiceId', '==', id)),
+    );
+    const batch = writeBatch(db);
+    for (const d of snap.docs) {
+      batch.update(d.ref, { invoiceId: null });
+    }
+    batch.delete(doc(db, 'users', uid, 'invoices', id));
+    await batch.commit();
   },
 };
 

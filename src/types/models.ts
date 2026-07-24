@@ -40,4 +40,21 @@ export interface Entry {
   link: string;
   description: string;
   hours: number;
+  // Set when the entry has been billed: the entry is locked (only the
+  // description stays editable, no deletion). Docs created before this
+  // field existed don't have it: missing = not invoiced.
+  invoiceId?: string | null;
+}
+
+// An issued invoice: the entries of `clientId` dated within
+// [dateFrom, dateTo] that were not yet invoiced get locked with this
+// invoice's id. `hours`/`amount` are frozen at creation time.
+export interface Invoice {
+  id: string;
+  clientId: string;
+  number: string;
+  dateFrom: string; // YYYY-MM-DD inclusive
+  dateTo: string; // YYYY-MM-DD inclusive
+  hours: number;
+  amount: number;
 }

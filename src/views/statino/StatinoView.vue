@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, onMounted, ref, watch } from 'vue';
 import { toast } from 'vue-sonner';
-import { ExternalLink, Pencil, Plus, Trash2 } from '@lucide/vue';
+import { ExternalLink, Lock, Pencil, Plus, Trash2 } from '@lucide/vue';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -265,6 +265,12 @@ function onEntrySaved(e: Entry) {
 }
 
 function askDeleteEntry(e: Entry) {
+  if (e.invoiceId) {
+    toast.info('Attività fatturata', {
+      description: 'È conteggiata in una fattura: elimina prima la fattura per sbloccarla.',
+    });
+    return;
+  }
   deleteTarget.value = e;
   deleteOpen.value = true;
 }
@@ -411,6 +417,11 @@ const loading = computed(() => loadingCatalogs.value || loadingEntries.value);
                     <span class="text-xs tabular-nums text-muted-foreground">
                       ({{ formatHours(e.hours) }} h)
                     </span>
+                    <Lock
+                      v-if="e.invoiceId"
+                      class="size-3 text-muted-foreground"
+                      aria-label="Attività fatturata"
+                    />
                     <span class="inline-flex opacity-0 transition-opacity group-hover:opacity-100">
                       <button
                         class="rounded p-0.5 text-muted-foreground hover:text-foreground"
@@ -420,6 +431,7 @@ const loading = computed(() => loadingCatalogs.value || loadingEntries.value);
                         <Pencil class="size-3" />
                       </button>
                       <button
+                        v-if="!e.invoiceId"
                         class="rounded p-0.5 text-muted-foreground hover:text-destructive"
                         aria-label="Elimina attività"
                         @click="askDeleteEntry(e)"
