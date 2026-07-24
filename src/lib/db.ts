@@ -1,6 +1,15 @@
-import { addDoc, collection, deleteDoc, doc, getDocs, setDoc } from 'firebase/firestore';
+import {
+  addDoc,
+  collection,
+  deleteDoc,
+  doc,
+  getDocs,
+  query,
+  setDoc,
+  where,
+} from 'firebase/firestore';
 import { db } from '@/lib/firebase';
-import type { Client, Contract, Project } from '@/types/models';
+import type { Client, Contract, Entry, Project } from '@/types/models';
 
 // Thin typed CRUD helpers over the per-user subcollections
 // (users/{uid}/<name>). Views call these directly — the Firestore
@@ -37,6 +46,25 @@ export const projectsRepo = makeRepo<Project>('projects', (a, b) => a.name.local
 export const contractsRepo = makeRepo<Contract>('contracts', (a, b) =>
   b.startDate.localeCompare(a.startDate),
 );
+
+// Entries are loaded a calendar year at a time (single-field range query,
+// no composite index): the statino view needs the whole year anyway to
+// compute per-contract progress against the annual allowance.
+export const entriesRepo = {
+  ...makeRepo<Entry>('entries', (a, b) => a.date.localeCompare(b.date)),
+  async listYear(uid: string, year: number): Promise<Entry[]> {
+    const snap = await getDocs(
+      query(
+        collection(db, 'users', uid, 'entries'),
+        where('date', '>=', `${year}-01-01`),
+        where('date', '<=', `${year}-12-31`),
+      ),
+    );
+    return snap.docs
+      .map((d) => ({ id: d.id, ...d.data() }) as Entry)
+      .sort((a, b) => a.date.localeCompare(b.date));
+  },
+};
 
 export function extractErrorMessage(err: unknown): string {
   return err instanceof Error ? err.message : String(err);
