@@ -1,10 +1,35 @@
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
-    // Single-user app: every document lives under users/{uid}/… and is
-    // readable/writable only by its owner.
+    function signedIn() {
+      return request.auth != null;
+    }
+
+    // The admin email is also hardcoded client-side in src/lib/config.ts —
+    // keep the two in sync.
+    function isAdmin() {
+      return signedIn() && request.auth.token.email == 'gepisolo@gmail.com';
+    }
+
+    // Access requires an invite: a doc in allowedUsers keyed by the
+    // (lowercase) email. The admin is always allowed, so the list can be
+    // bootstrapped from the app itself.
+    function isAllowed() {
+      return isAdmin()
+        || (signedIn()
+            && request.auth.token.email_verified
+            && exists(/databases/$(database)/documents/allowedUsers/$(request.auth.token.email)));
+    }
+
+    match /allowedUsers/{email} {
+      // Anyone signed in may check their own invite (the app uses this to
+      // show the "not authorized" screen); only the admin manages the list.
+      allow get: if signedIn() && request.auth.token.email == email;
+      allow list, create, update, delete: if isAdmin();
+    }
+
     match /users/{uid}/{document=**} {
-      allow read, write: if request.auth != null && request.auth.uid == uid;
+      allow read, write: if isAllowed() && request.auth.uid == uid;
     }
   }
 }

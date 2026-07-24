@@ -36,7 +36,13 @@ npm run format       # prettier --write
 - `firebase.json` + `firestore.rules` are in the repo; deploy rules with
   the Firebase MCP `firebase_deploy` tool (or `npx firebase-tools deploy`).
 - All documents live under `users/{uid}/…`; rules allow access only to the
-  owner (`request.auth.uid == uid`).
+  owner (`request.auth.uid == uid`) **and** only if the account is invited:
+  access requires an `allowedUsers/{email}` doc (lowercase email as ID) or
+  being the admin. The admin email (`gepisolo@gmail.com`) is hardcoded in
+  BOTH `firestore.rules` (`isAdmin`) and `src/lib/config.ts` — keep in sync.
+  The admin manages invites from the `/users` page (admin-only route); the
+  auth store mirrors the check in `checkAllowed()`, the router guard sends
+  uninvited accounts to `/unauthorized`.
 - **Hosting**: Firebase Hosting (free tier), `dist/` with SPA rewrite →
   https://statino-gepisolo.web.app. CI/CD via GitHub Actions
   (`.github/workflows/`): push to `main` → lint + build + deploy live;

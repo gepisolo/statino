@@ -16,6 +16,14 @@ export function installAuthGuard(router: Router): void {
     if (!auth.isAuthenticated) {
       return { name: 'login', query: { redirect: to.fullPath } };
     }
+
+    if (!(await auth.checkAllowed())) {
+      return to.name === 'unauthorized' ? true : { name: 'unauthorized' };
+    }
+
+    if (to.meta.admin && !auth.isAdmin) {
+      return { path: '/' };
+    }
     return true;
   });
 }

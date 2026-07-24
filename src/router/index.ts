@@ -12,6 +12,11 @@ export const router = createRouter({
       component: () => import('@/views/auth/LoginView.vue'),
     },
     {
+      path: '/unauthorized',
+      name: 'unauthorized',
+      component: () => import('@/views/auth/UnauthorizedView.vue'),
+    },
+    {
       path: '/',
       component: AppShell,
       children: [
@@ -34,6 +39,12 @@ export const router = createRouter({
           path: 'contracts',
           name: 'contracts',
           component: () => import('@/views/contracts/ContractsView.vue'),
+        },
+        {
+          path: 'users',
+          name: 'users',
+          meta: { admin: true },
+          component: () => import('@/views/administration/UsersView.vue'),
         },
       ],
     },

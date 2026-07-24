@@ -1,18 +1,20 @@
 <script setup lang="ts">
+import { computed } from 'vue';
 import { RouterLink, RouterView, useRoute } from 'vue-router';
-import { CalendarDays, Users, FolderKanban, FileText, LogOut } from '@lucide/vue';
+import { CalendarDays, Users, FolderKanban, FileText, LogOut, UserPlus } from '@lucide/vue';
 import { useAuthStore } from '@/stores/auth';
 import { cn } from '@/lib/utils';
 
 const auth = useAuthStore();
 const route = useRoute();
 
-const nav = [
+const nav = computed(() => [
   { name: 'statino', label: 'Statino', to: '/', icon: CalendarDays },
   { name: 'clients', label: 'Clienti', to: '/clients', icon: Users },
   { name: 'projects', label: 'Progetti', to: '/projects', icon: FolderKanban },
   { name: 'contracts', label: 'Contratti', to: '/contracts', icon: FileText },
-];
+  ...(auth.isAdmin ? [{ name: 'users', label: 'Utenti', to: '/users', icon: UserPlus }] : []),
+]);
 
 const appEnv = import.meta.env.VITE_APP_ENV || 'production';
 const appVersion = __APP_VERSION__;
