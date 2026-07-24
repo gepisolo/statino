@@ -4,7 +4,7 @@ Personal timesheet app ("statino") replacing an Excel sheet: hours logged
 per day, per client, against yearly contracts. Single user (Google login),
 data on Firestore. UI language: Italian.
 
-## Status (2026-07-24, v0.5.0)
+## Status (2026-07-24, v0.9.0)
 
 **Done and deployed** to https://statino-gepisolo.web.app (CI green):
 
@@ -27,7 +27,9 @@ data on Firestore. UI language: Italian.
   optional project, ticket, link, description, hours), side panel with
   month totals (hours + amount) and per-contract progress (annual, done
   in year up to selected month, in month, remaining).
-
+- Toasts dismiss on click (v0.6.0): delegated handler in `App.vue`
+  mapping the clicked `[data-sonner-toast]`'s `data-index` onto
+  `toast.getToasts()` (vue-sonner has no native click-to-dismiss).
 - Invoices (v0.8.0): `/invoices` page + sidebar entry. Creating an
   invoice (client, number, dateFrom/dateTo) shows live hours+amount of
   the period's not-yet-invoiced entries and, on save, locks them by
@@ -44,11 +46,18 @@ data on Firestore. UI language: Italian.
   toIncome null = no cap). Groundwork for future net-income calcs — no
   consumer of this data yet. New `ui/tabs` component.
 
+The owner now uses the app with real data (registries created by hand,
+2026 backlog imported): it has passed real usage, not just typecheck.
+
 **Not yet done / next**:
 
-- End-to-end test with real data by the owner — the whole flow after the
-  registries was only verified via typecheck/lint/compile, NOT clicked
-  through with an authenticated session. Expect UI ritocchi.
+- Net-income calc ("netto previsto" in the old Excel): consume
+  `fiscalYears` + `taxRates` — with forfettario: billed × profitability
+  index → taxable income → contribution/tax brackets. Settings (v0.9.0)
+  exist precisely for this; nothing reads them yet.
+- Invoices have no edit (delete + recreate is the flow) and entries
+  already invoiced are never re-counted by overlapping periods — both
+  deliberate choices, revisit only if asked.
 - No changelog page yet (earsup convention `lib/changelog.ts` +
   `/changelog` route) — versions are bumped but not documented in-app.
 - Possible future items mentioned but not requested yet: CSV/Excel export
