@@ -4,6 +4,37 @@ Personal timesheet app ("statino") replacing an Excel sheet: hours logged
 per day, per client, against yearly contracts. Single user (Google login),
 data on Firestore. UI language: Italian.
 
+## Status (2026-07-24, v0.5.0)
+
+**Done and deployed** to https://statino-gepisolo.web.app (CI green):
+
+- Full setup: Firebase project `statino-gepisolo`, Google sign-in, Firestore
+  (eur3) with owner-only + invite-allowlist rules, Hosting, GitHub Actions
+  CI/CD (push to main → deploy; PRs → preview channel).
+- Invite-only access (v0.2.0): `allowedUsers/{email}` + admin `/users` page
+  + `/unauthorized` screen.
+- Registries (v0.3.0–0.4.0): clients, contracts (client filter, state
+  badge attivo/futuro/scaduto), projects — all CRUD with form dialogs.
+- Statino view (v0.5.0): year/month/client selectors (last client
+  persisted in localStorage), month grid with weekends highlighted +
+  TOTALE row, multiple entries per day (contract active on that day,
+  optional project, ticket, link, description, hours), side panel with
+  month totals (hours + amount) and per-contract progress (annual, done
+  in year up to selected month, in month, remaining).
+
+**Not yet done / next**:
+
+- End-to-end test with real data by the owner — the whole flow after the
+  registries was only verified via typecheck/lint/compile, NOT clicked
+  through with an authenticated session. Expect UI ritocchi.
+- No changelog page yet (earsup convention `lib/changelog.ts` +
+  `/changelog` route) — versions are bumped but not documented in-app.
+- Possible future items mentioned but not requested yet: CSV/Excel export
+  of a month, per-project hour breakdown view (data model already
+  supports it via `entries.projectId`), deleting a revoked user's data.
+- CI annotations: actions/checkout@v4 + setup-node@v4 are on the Node 20
+  deprecation list — bump to newer majors when stable.
+
 ## Stack
 
 Same patterns as `~/go/projects/xformance/earsup-dashboard` (see its
