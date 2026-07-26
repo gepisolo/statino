@@ -77,9 +77,18 @@ export interface TaxRate {
   toIncome: number | null;
 }
 
+// What was actually collected for an invoice — may differ from the
+// invoiced `amount` (fees, withholding, roundings).
+export interface InvoicePayment {
+  date: string; // YYYY-MM-DD
+  amount: number;
+  description: string;
+}
+
 // An issued invoice: the entries of `clientId` dated within
 // [dateFrom, dateTo] that were not yet invoiced get locked with this
 // invoice's id. `hours`/`amount` are frozen at creation time.
+// `payment` missing or null = not collected yet.
 export interface Invoice {
   id: string;
   clientId: string;
@@ -88,4 +97,5 @@ export interface Invoice {
   dateTo: string; // YYYY-MM-DD inclusive
   hours: number;
   amount: number;
+  payment?: InvoicePayment | null;
 }

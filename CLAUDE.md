@@ -4,7 +4,7 @@ Personal timesheet app ("statino") replacing an Excel sheet: hours logged
 per day, per client, against yearly contracts. Single user (Google login),
 data on Firestore. UI language: Italian.
 
-## Status (2026-07-26, v0.10.0)
+## Status (2026-07-26, v0.11.0)
 
 **Done and deployed** to https://statino-gepisolo.web.app (CI green):
 
@@ -54,6 +54,13 @@ data on Firestore. UI language: Italian.
   `fiscalYears`: `forfaitLimit` (limite ricavi, €) and `hardLimit` (€,
   above it the regime falls immediately and the year's invoices must be
   recomputed); null under ordinario, missing on older docs.
+- Invoice payments (v0.11.0): each invoice can record what was actually
+  collected — `payment { date, amount, description }` on the invoice
+  doc (missing/null = not collected; may differ from the invoiced
+  amount). ⋯ menu → "Registra/Modifica incasso…" dialog
+  (`InvoicePaymentFormDialog.vue`, amount prefilled with the invoice
+  total, "Rimuovi incasso" button when set); "Incassato" column in the
+  table (amount + date, description as tooltip).
 
 The owner now uses the app with real data (registries created by hand,
 2026 backlog imported): it has passed real usage, not just typecheck.
@@ -137,7 +144,9 @@ npm run format       # prettier --write
   month/year totals come from date-range queries. `invoiceId` set =
   billed and locked (missing = not invoiced).
 - `users/{uid}/invoices` — `{ clientId, number, dateFrom, dateTo, hours,
-  amount }`; hours/amount frozen at creation.
+  amount, payment?|null }`; hours/amount frozen at creation. `payment`
+  is `{ date, amount, description }`: what was actually collected
+  (missing/null = not yet; can differ from `amount`).
 - `users/{uid}/fiscalYears` — `{ year, regime: 'ordinario'|'forfettario',
   profitabilityIndex|null, forfaitLimit?|null, hardLimit?|null }` (one
   per year, uniqueness enforced in UI; limits € are forfettario-only).

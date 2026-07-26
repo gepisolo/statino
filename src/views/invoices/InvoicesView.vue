@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue';
 import { toast } from 'vue-sonner';
-import { MoreHorizontal, Plus, Trash2 } from '@lucide/vue';
+import { Banknote, MoreHorizontal, Plus, Trash2 } from '@lucide/vue';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import {
@@ -27,6 +27,7 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog';
 import InvoiceFormDialog from '@/components/invoices/InvoiceFormDialog.vue';
+import InvoicePaymentFormDialog from '@/components/invoices/InvoicePaymentFormDialog.vue';
 import { clientsRepo, contractsRepo, invoicesRepo, extractErrorMessage } from '@/lib/db';
 import { formatDate, formatEur, formatHours } from '@/lib/format';
 import { useAuthStore } from '@/stores/auth';
@@ -40,6 +41,9 @@ const clients = ref<Client[]>([]);
 const contracts = ref<Contract[]>([]);
 
 const formOpen = ref(false);
+
+const paymentOpen = ref(false);
+const paymentTarget = ref<Invoice | null>(null);
 
 const deleteOpen = ref(false);
 const deleteTarget = ref<Invoice | null>(null);
@@ -63,6 +67,15 @@ onMounted(async () => {
 
 function onSaved(i: Invoice) {
   invoices.value = [...invoices.value, i].sort((a, b) => b.dateFrom.localeCompare(a.dateFrom));
+}
+
+function openPayment(i: Invoice) {
+  paymentTarget.value = i;
+  paymentOpen.value = true;
+}
+
+function onPaymentSaved(i: Invoice) {
+  invoices.value = invoices.value.map((x) => (x.id === i.id ? i : x));
 }
 
 function askDelete(i: Invoice) {
@@ -117,12 +130,13 @@ async function confirmDelete() {
           <TableHead>Periodo</TableHead>
           <TableHead class="text-right">Ore</TableHead>
           <TableHead class="text-right">Importo</TableHead>
+          <TableHead class="text-right">Incassato</TableHead>
           <TableHead class="w-12 text-right" />
         </TableRow>
       </TableHeader>
       <TableBody>
         <TableRow v-if="!invoices.length">
-          <TableCell colspan="6" class="text-center text-muted-foreground">
+          <TableCell colspan="7" class="text-center text-muted-foreground">
             Nessuna fattura.
           </TableCell>
         </TableRow>
@@ -134,6 +148,15 @@ async function confirmDelete() {
           </TableCell>
           <TableCell class="text-right tabular-nums">{{ formatHours(i.hours) }}</TableCell>
           <TableCell class="text-right tabular-nums">{{ formatEur(i.amount) }}</TableCell>
+          <TableCell class="text-right tabular-nums">
+            <template v-if="i.payment">
+              <div :title="i.payment.description || undefined">
+                {{ formatEur(i.payment.amount) }}
+              </div>
+              <div class="text-xs text-muted-foreground">{{ formatDate(i.payment.date) }}</div>
+            </template>
+            <template v-else>—</template>
+          </TableCell>
           <TableCell class="text-right">
             <DropdownMenu>
               <DropdownMenuTrigger as-child>
@@ -142,6 +165,10 @@ async function confirmDelete() {
                 </Button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end">
+                <DropdownMenuItem @select="openPayment(i)">
+                  <Banknote class="mr-2 size-4" />
+                  {{ i.payment ? 'Modifica incasso…' : 'Registra incasso…' }}
+                </DropdownMenuItem>
                 <DropdownMenuItem
                   class="text-destructive focus:text-destructive"
                   @select="askDelete(i)"
@@ -161,6 +188,12 @@ async function confirmDelete() {
       :clients="clients"
       :contracts="contracts"
       @saved="onSaved"
+    />
+
+    <InvoicePaymentFormDialog
+      v-model:open="paymentOpen"
+      :invoice="paymentTarget"
+      @saved="onPaymentSaved"
     />
 
     <Dialog v-model:open="deleteOpen">

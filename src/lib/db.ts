@@ -6,6 +6,7 @@ import {
   getDocs,
   query,
   setDoc,
+  updateDoc,
   where,
   writeBatch,
 } from 'firebase/firestore';
@@ -16,6 +17,7 @@ import type {
   Entry,
   FiscalYear,
   Invoice,
+  InvoicePayment,
   Project,
   TaxRate,
 } from '@/types/models';
@@ -95,6 +97,10 @@ export const invoicesRepo = {
     }
     await batch.commit();
     return { id: ref.id, ...data };
+  },
+  // Records (or clears, with null) what was collected for the invoice.
+  async setPayment(uid: string, id: string, payment: InvoicePayment | null): Promise<void> {
+    await updateDoc(doc(db, 'users', uid, 'invoices', id), { payment });
   },
   async removeWithEntries(uid: string, id: string): Promise<void> {
     const snap = await getDocs(
