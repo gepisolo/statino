@@ -201,3 +201,11 @@ the selected month, hours in month, remaining.
 - Versioning: `package.json` version injected as `__APP_VERSION__`
   (rendered in the sidebar footer). Bump MINOR for feat, PATCH for fix,
   in the same commit.
+- Workflow: one commit per feature, straight on `main` (Italian
+  conventional-commit messages), push right away — CI deploys. Update
+  this file's Status section in the same commit. Verification is
+  typecheck+lint+build plus the owner trying the deployed app: the
+  browser can't be driven headlessly (Google login).
+- Charts: hand-rolled SVG in `components/stats/` (no chart lib). Keep
+  the dataviz rules: ≤3 series, one unit per chart, palette + dark
+  variants live in `BarChart.vue`.
