@@ -4,7 +4,7 @@ Personal timesheet app ("statino") replacing an Excel sheet: hours logged
 per day, per client, against yearly contracts. Single user (Google login),
 data on Firestore. UI language: Italian.
 
-## Status (2026-07-26, v0.14.0)
+## Status (2026-07-26, v0.15.0)
 
 **Done and deployed** to https://statino-gepisolo.web.app (CI green):
 
@@ -79,14 +79,25 @@ data on Firestore. UI language: Italian.
 - Fatturabile row (v0.14.0): the per-client and all-clients statino
   cards also show "Fatturabile" — every activity of the year up to the
   selected month at its contract rate, invoiced or not.
+- Statistics section (v0.15.0): "Statistiche" sidebar group (children
+  rendered inline, `AppShell.vue` nav now supports groups) with three
+  views under `views/stats/`: per mese (year selector: KPI tiles with
+  monthly averages, projection, "da accantonare"; forfettario limit
+  meter — first consumer of `forfaitLimit`/`hardLimit`; ore + euro
+  charts; monthly table where net is the *marginal* net of the
+  cumulative collected, so rows sum to the year), per cliente (year
+  selector: charts + table with hour-share bars), per anno (all years
+  compared: charts + table with billable delta % and avg monthly net).
+  Shared pieces: `lib/stats.ts` (`periodTotals` by date range,
+  `invoiceRefDate`, `elapsedMonths`), `components/stats/` `BarChart.vue`
+  (SVG grouped bars ≤3 series, hover tooltip, validated palette
+  blue/orange/aqua, light+dark), `StatTile.vue`, `LimitMeter.vue`
+  (status colors with icon+label). Charts never mix units (hours vs €).
 
 The owner now uses the app with real data (registries created by hand,
 2026 backlog imported): it has passed real usage, not just typecheck.
 
 **Not yet done / next**:
-
-- Nothing consumes `forfaitLimit`/`hardLimit` yet (e.g. warnings when
-  the year's invoiced total approaches/crosses the limits).
 - Invoices have no edit (delete + recreate is the flow) and entries
   already invoiced are never re-counted by overlapping periods — both
   deliberate choices, revisit only if asked.

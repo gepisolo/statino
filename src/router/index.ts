@@ -49,6 +49,21 @@ export const router = createRouter({
           component: () => import('@/views/invoices/InvoicesView.vue'),
         },
         {
+          path: 'stats/months',
+          name: 'stats-months',
+          component: () => import('@/views/stats/StatsMonthsView.vue'),
+        },
+        {
+          path: 'stats/clients',
+          name: 'stats-clients',
+          component: () => import('@/views/stats/StatsClientsView.vue'),
+        },
+        {
+          path: 'stats/years',
+          name: 'stats-years',
+          component: () => import('@/views/stats/StatsYearsView.vue'),
+        },
+        {
           path: 'settings',
           name: 'settings',
           component: () => import('@/views/settings/SettingsView.vue'),

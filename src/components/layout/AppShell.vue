@@ -1,18 +1,53 @@
 <script setup lang="ts">
 import { computed } from 'vue';
 import { RouterLink, RouterView, useRoute } from 'vue-router';
-import { CalendarDays, Users, FileText, Receipt, Settings, LogOut, UserPlus } from '@lucide/vue';
+import {
+  CalendarDays,
+  ChartColumnBig,
+  Users,
+  FileText,
+  Receipt,
+  Settings,
+  LogOut,
+  UserPlus,
+} from '@lucide/vue';
+import type { Component } from 'vue';
 import { useAuthStore } from '@/stores/auth';
 import { cn } from '@/lib/utils';
 
 const auth = useAuthStore();
 const route = useRoute();
 
-const nav = computed(() => [
+interface NavChild {
+  name: string;
+  label: string;
+  to: string;
+}
+interface NavLink extends NavChild {
+  icon: Component;
+}
+interface NavGroup {
+  name: string;
+  label: string;
+  icon: Component;
+  children: NavChild[];
+}
+
+const nav = computed<(NavLink | NavGroup)[]>(() => [
   { name: 'statino', label: 'Statino', to: '/', icon: CalendarDays },
   { name: 'clients', label: 'Clienti', to: '/clients', icon: Users },
   { name: 'contracts', label: 'Contratti', to: '/contracts', icon: FileText },
   { name: 'invoices', label: 'Fatture', to: '/invoices', icon: Receipt },
+  {
+    name: 'stats',
+    label: 'Statistiche',
+    icon: ChartColumnBig,
+    children: [
+      { name: 'stats-months', label: 'Per mese', to: '/stats/months' },
+      { name: 'stats-clients', label: 'Per cliente', to: '/stats/clients' },
+      { name: 'stats-years', label: 'Per anno', to: '/stats/years' },
+    ],
+  },
   { name: 'settings', label: 'Impostazioni', to: '/settings', icon: Settings },
   ...(auth.isAdmin ? [{ name: 'users', label: 'Utenti', to: '/users', icon: UserPlus }] : []),
 ]);
@@ -37,22 +72,48 @@ async function onLogout() {
         <span class="text-lg font-semibold tracking-tight">Statino</span>
       </div>
       <nav class="flex-1 space-y-1 px-2">
-        <RouterLink
-          v-for="item in nav"
-          :key="item.name"
-          :to="item.to"
-          :class="
-            cn(
-              'flex items-center gap-2 rounded-md px-3 py-2 text-sm font-medium transition-colors',
-              activeNav === item.name
-                ? 'bg-sidebar-accent text-sidebar-accent-foreground'
-                : 'text-sidebar-foreground/70 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground',
-            )
-          "
-        >
-          <component :is="item.icon" class="size-4" />
-          {{ item.label }}
-        </RouterLink>
+        <template v-for="item in nav" :key="item.name">
+          <RouterLink
+            v-if="'to' in item"
+            :to="item.to"
+            :class="
+              cn(
+                'flex items-center gap-2 rounded-md px-3 py-2 text-sm font-medium transition-colors',
+                activeNav === item.name
+                  ? 'bg-sidebar-accent text-sidebar-accent-foreground'
+                  : 'text-sidebar-foreground/70 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground',
+              )
+            "
+          >
+            <component :is="item.icon" class="size-4" />
+            {{ item.label }}
+          </RouterLink>
+          <div v-else>
+            <div
+              class="flex items-center gap-2 rounded-md px-3 py-2 text-sm font-medium text-sidebar-foreground/70"
+            >
+              <component :is="item.icon" class="size-4" />
+              {{ item.label }}
+            </div>
+            <div class="space-y-0.5">
+              <RouterLink
+                v-for="child in item.children"
+                :key="child.name"
+                :to="child.to"
+                :class="
+                  cn(
+                    'flex items-center rounded-md py-1.5 pl-9 pr-3 text-sm transition-colors',
+                    activeNav === child.name
+                      ? 'bg-sidebar-accent font-medium text-sidebar-accent-foreground'
+                      : 'text-sidebar-foreground/70 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground',
+                  )
+                "
+              >
+                {{ child.label }}
+              </RouterLink>
+            </div>
+          </div>
+        </template>
       </nav>
       <div class="border-t border-sidebar-border p-3">
         <div class="mb-2 truncate px-1 text-xs text-muted-foreground">
