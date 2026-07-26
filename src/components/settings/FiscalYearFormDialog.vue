@@ -20,6 +20,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { fiscalYearsRepo, extractErrorMessage } from '@/lib/db';
+import { parseDecimal } from '@/lib/format';
 import { useAuthStore } from '@/stores/auth';
 import type { FiscalRegime, FiscalYear } from '@/types/models';
 
@@ -40,16 +41,20 @@ const emit = defineEmits<{
 
 const auth = useAuthStore();
 
-const year = ref('');
+const year = ref<string | number>('');
 const regime = ref<FiscalRegime>('forfettario');
-const profitabilityIndex = ref('');
+const profitabilityIndex = ref<string | number>('');
+const forfaitLimit = ref<string | number>('');
+const hardLimit = ref<string | number>('');
 const submitting = ref(false);
 
 const title = computed(() => (props.mode === 'create' ? 'Nuovo anno fiscale' : 'Modifica anno'));
 const ctaLabel = computed(() => (props.mode === 'create' ? 'Crea' : 'Salva modifiche'));
 
 const yearNum = computed(() => Number(year.value));
-const indexNum = computed(() => Number(profitabilityIndex.value.replace(',', '.')));
+const indexNum = computed(() => parseDecimal(profitabilityIndex.value));
+const forfaitNum = computed(() => parseDecimal(forfaitLimit.value));
+const hardNum = computed(() => parseDecimal(hardLimit.value));
 const valid = computed(
   () =>
     Number.isInteger(yearNum.value) &&
@@ -59,7 +64,13 @@ const valid = computed(
       (profitabilityIndex.value !== '' &&
         Number.isFinite(indexNum.value) &&
         indexNum.value > 0 &&
-        indexNum.value <= 100)),
+        indexNum.value <= 100 &&
+        forfaitLimit.value !== '' &&
+        Number.isFinite(forfaitNum.value) &&
+        forfaitNum.value > 0 &&
+        hardLimit.value !== '' &&
+        Number.isFinite(hardNum.value) &&
+        hardNum.value >= forfaitNum.value)),
 );
 
 watch(
@@ -67,16 +78,17 @@ watch(
   (open) => {
     if (!open) return;
     if (props.mode === 'edit' && props.fiscalYear) {
-      year.value = String(props.fiscalYear.year);
+      year.value = props.fiscalYear.year;
       regime.value = props.fiscalYear.regime;
-      profitabilityIndex.value =
-        props.fiscalYear.profitabilityIndex === null
-          ? ''
-          : String(props.fiscalYear.profitabilityIndex);
+      profitabilityIndex.value = props.fiscalYear.profitabilityIndex ?? '';
+      forfaitLimit.value = props.fiscalYear.forfaitLimit ?? '';
+      hardLimit.value = props.fiscalYear.hardLimit ?? '';
     } else {
-      year.value = String(new Date().getFullYear());
+      year.value = new Date().getFullYear();
       regime.value = 'forfettario';
       profitabilityIndex.value = '';
+      forfaitLimit.value = '';
+      hardLimit.value = '';
     }
   },
 );
@@ -94,10 +106,13 @@ async function submit() {
   }
   submitting.value = true;
   try {
+    const forfettario = regime.value === 'forfettario';
     const data = {
       year: yearNum.value,
       regime: regime.value,
-      profitabilityIndex: regime.value === 'forfettario' ? indexNum.value : null,
+      profitabilityIndex: forfettario ? indexNum.value : null,
+      forfaitLimit: forfettario ? forfaitNum.value : null,
+      hardLimit: forfettario ? hardNum.value : null,
     };
     const saved =
       props.mode === 'create'
@@ -127,7 +142,7 @@ function handleOpenChange(v: boolean) {
       <DialogHeader>
         <DialogTitle>{{ title }}</DialogTitle>
         <DialogDescription>
-          Regime fiscale dell'anno; l'indice di redditività serve solo per il forfettario.
+          Regime fiscale dell'anno; indice di redditività e limiti servono solo per il forfettario.
         </DialogDescription>
       </DialogHeader>
 
@@ -159,19 +174,47 @@ function handleOpenChange(v: boolean) {
           </div>
         </div>
 
-        <div v-if="regime === 'forfettario'" class="space-y-2">
-          <Label for="fiscal-index">Indice di redditività %</Label>
-          <Input
-            id="fiscal-index"
-            v-model="profitabilityIndex"
-            type="number"
-            min="1"
-            max="100"
-            step="0.01"
-            placeholder="78"
-            :disabled="submitting"
-          />
-        </div>
+        <template v-if="regime === 'forfettario'">
+          <div class="space-y-2">
+            <Label for="fiscal-index">Indice di redditività %</Label>
+            <Input
+              id="fiscal-index"
+              v-model="profitabilityIndex"
+              type="number"
+              min="1"
+              max="100"
+              step="0.01"
+              placeholder="78"
+              :disabled="submitting"
+            />
+          </div>
+          <div class="grid grid-cols-2 gap-4">
+            <div class="space-y-2">
+              <Label for="fiscal-forfait-limit">Limite forfettario €</Label>
+              <Input
+                id="fiscal-forfait-limit"
+                v-model="forfaitLimit"
+                type="number"
+                min="0"
+                step="0.01"
+                placeholder="85000"
+                :disabled="submitting"
+              />
+            </div>
+            <div class="space-y-2">
+              <Label for="fiscal-hard-limit">Limite hard €</Label>
+              <Input
+                id="fiscal-hard-limit"
+                v-model="hardLimit"
+                type="number"
+                min="0"
+                step="0.01"
+                placeholder="100000"
+                :disabled="submitting"
+              />
+            </div>
+          </div>
+        </template>
 
         <DialogFooter>
           <Button

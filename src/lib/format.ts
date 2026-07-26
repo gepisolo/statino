@@ -22,6 +22,14 @@ export function formatHours(n: number): string {
   return hoursFmt.format(n);
 }
 
+// Numeric form fields can hold either a string or a number: Vue
+// auto-casts native `type="number"` inputs to number, but the field
+// starts as (and can revert to) the empty string. Accepts the Italian
+// comma decimal separator when the value is a string.
+export function parseDecimal(v: string | number): number {
+  return typeof v === 'number' ? v : Number(v.replace(',', '.'));
+}
+
 const monthFmt = new Intl.DateTimeFormat('it-IT', { month: 'long' });
 
 // `month` is 1-based (1 = gennaio).

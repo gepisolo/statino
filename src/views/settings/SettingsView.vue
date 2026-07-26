@@ -187,12 +187,14 @@ const typeLabels = { contributi: 'Contributi', tasse: 'Tasse' } as const;
               <TableHead>Anno</TableHead>
               <TableHead>Regime</TableHead>
               <TableHead class="text-right">Indice di redditività</TableHead>
+              <TableHead class="text-right">Limite forfettario</TableHead>
+              <TableHead class="text-right">Limite hard</TableHead>
               <TableHead class="w-12 text-right" />
             </TableRow>
           </TableHeader>
           <TableBody>
             <TableRow v-if="!fiscalYears.length">
-              <TableCell colspan="4" class="text-center text-muted-foreground">
+              <TableCell colspan="6" class="text-center text-muted-foreground">
                 Nessun anno configurato.
               </TableCell>
             </TableRow>
@@ -203,6 +205,14 @@ const typeLabels = { contributi: 'Contributi', tasse: 'Tasse' } as const;
                 <template v-if="f.profitabilityIndex !== null">
                   {{ formatHours(f.profitabilityIndex) }}%
                 </template>
+                <template v-else>—</template>
+              </TableCell>
+              <TableCell class="text-right tabular-nums">
+                <template v-if="f.forfaitLimit != null">{{ formatEur(f.forfaitLimit) }}</template>
+                <template v-else>—</template>
+              </TableCell>
+              <TableCell class="text-right tabular-nums">
+                <template v-if="f.hardLimit != null">{{ formatEur(f.hardLimit) }}</template>
                 <template v-else>—</template>
               </TableCell>
               <TableCell class="text-right">

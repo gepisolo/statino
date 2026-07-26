@@ -47,14 +47,20 @@ export interface Entry {
 }
 
 // Fiscal profile of a calendar year (one doc per year). The
-// profitability index (indice di redditività, %) only applies to the
-// forfettario regime — null otherwise.
+// profitability index (indice di redditività, %) and the revenue
+// limits (€) only apply to the forfettario regime — null otherwise.
+// Above `forfaitLimit` the regime is lost from the next year; above
+// `hardLimit` it is lost immediately and the current year's invoices
+// must all be recomputed. Docs created before the limit fields existed
+// don't have them.
 export type FiscalRegime = 'ordinario' | 'forfettario';
 export interface FiscalYear {
   id: string;
   year: number;
   regime: FiscalRegime;
   profitabilityIndex: number | null;
+  forfaitLimit?: number | null;
+  hardLimit?: number | null;
 }
 
 // A tax/contribution bracket: `rate` (%) applies to the taxable income

@@ -20,6 +20,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { taxRatesRepo, extractErrorMessage } from '@/lib/db';
+import { parseDecimal } from '@/lib/format';
 import { useAuthStore } from '@/stores/auth';
 import type { TaxRate, TaxRateType } from '@/types/models';
 
@@ -38,23 +39,21 @@ const emit = defineEmits<{
 
 const auth = useAuthStore();
 
-const year = ref('');
+const year = ref<string | number>('');
 const type = ref<TaxRateType>('tasse');
 const name = ref('');
-const rate = ref('');
-const fromIncome = ref('');
-const toIncome = ref('');
+const rate = ref<string | number>('');
+const fromIncome = ref<string | number>('');
+const toIncome = ref<string | number>('');
 const submitting = ref(false);
 
 const title = computed(() => (props.mode === 'create' ? 'Nuova aliquota' : 'Modifica aliquota'));
 const ctaLabel = computed(() => (props.mode === 'create' ? 'Crea' : 'Salva modifiche'));
 
 const yearNum = computed(() => Number(year.value));
-const rateNum = computed(() => Number(rate.value.replace(',', '.')));
-const fromNum = computed(() => Number(fromIncome.value.replace(',', '.')));
-const toNum = computed(() =>
-  toIncome.value.trim() === '' ? null : Number(toIncome.value.replace(',', '.')),
-);
+const rateNum = computed(() => parseDecimal(rate.value));
+const fromNum = computed(() => parseDecimal(fromIncome.value));
+const toNum = computed(() => (toIncome.value === '' ? null : parseDecimal(toIncome.value)));
 const valid = computed(
   () =>
     Number.isInteger(yearNum.value) &&
@@ -76,18 +75,18 @@ watch(
   (open) => {
     if (!open) return;
     if (props.mode === 'edit' && props.taxRate) {
-      year.value = String(props.taxRate.year);
+      year.value = props.taxRate.year;
       type.value = props.taxRate.type;
       name.value = props.taxRate.name;
-      rate.value = String(props.taxRate.rate);
-      fromIncome.value = String(props.taxRate.fromIncome);
-      toIncome.value = props.taxRate.toIncome === null ? '' : String(props.taxRate.toIncome);
+      rate.value = props.taxRate.rate;
+      fromIncome.value = props.taxRate.fromIncome;
+      toIncome.value = props.taxRate.toIncome ?? '';
     } else {
-      year.value = String(new Date().getFullYear());
+      year.value = new Date().getFullYear();
       type.value = 'tasse';
       name.value = '';
       rate.value = '';
-      fromIncome.value = '0';
+      fromIncome.value = 0;
       toIncome.value = '';
     }
   },

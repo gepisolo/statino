@@ -4,7 +4,7 @@ Personal timesheet app ("statino") replacing an Excel sheet: hours logged
 per day, per client, against yearly contracts. Single user (Google login),
 data on Firestore. UI language: Italian.
 
-## Status (2026-07-24, v0.9.0)
+## Status (2026-07-26, v0.10.0)
 
 **Done and deployed** to https://statino-gepisolo.web.app (CI green):
 
@@ -45,6 +45,15 @@ data on Firestore. UI language: Italian.
   contributi/tasse, name, rate %, fromIncome/toIncome € brackets,
   toIncome null = no cap). Groundwork for future net-income calcs — no
   consumer of this data yet. New `ui/tabs` component.
+- Settings fixes + forfettario limits (v0.10.0): the settings dialogs
+  broke on numeric input — Vue auto-casts native `type="number"` inputs
+  to number (no `.number` modifier needed), so `.replace(',', '.')` on
+  the ref threw inside the `valid` computed and the submit button never
+  enabled. Numeric field refs are now `string | number` parsed via
+  `parseDecimal()` (`lib/format.ts`). New forfettario-only fields on
+  `fiscalYears`: `forfaitLimit` (limite ricavi, €) and `hardLimit` (€,
+  above it the regime falls immediately and the year's invoices must be
+  recomputed); null under ordinario, missing on older docs.
 
 The owner now uses the app with real data (registries created by hand,
 2026 backlog imported): it has passed real usage, not just typecheck.
@@ -130,7 +139,8 @@ npm run format       # prettier --write
 - `users/{uid}/invoices` — `{ clientId, number, dateFrom, dateTo, hours,
   amount }`; hours/amount frozen at creation.
 - `users/{uid}/fiscalYears` — `{ year, regime: 'ordinario'|'forfettario',
-  profitabilityIndex|null }` (one per year, uniqueness enforced in UI).
+  profitabilityIndex|null, forfaitLimit?|null, hardLimit?|null }` (one
+  per year, uniqueness enforced in UI; limits € are forfettario-only).
 - `users/{uid}/taxRates` — `{ year, type: 'contributi'|'tasse', name,
   rate, fromIncome, toIncome|null }` (bracket rows, many per year).
 
