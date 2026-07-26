@@ -4,7 +4,7 @@ Personal timesheet app ("statino") replacing an Excel sheet: hours logged
 per day, per client, against yearly contracts. Single user (Google login),
 data on Firestore. UI language: Italian.
 
-## Status (2026-07-26, v0.12.0)
+## Status (2026-07-26, v0.13.0)
 
 **Done and deployed** to https://statino-gepisolo.web.app (CI green):
 
@@ -68,10 +68,14 @@ data on Firestore. UI language: Italian.
   year has no fiscal profile). Statino side panel: month card gained
   "Netto previsto" and "Da accantonare" (on the month's billable
   amount); two new cards, per-client and all-clients, with year-to-
-  selected-month Fatturato (reference date: invoice `dateTo` — there is
-  no issue date), Incassato (by `payment.date`) and Netto computed on
-  the *collected* amount (an intermediary bills the clients; what the
-  owner draws differs from what is invoiced).
+  selected-month Fatturato, Incassato (by `payment.date`) and Netto
+  computed on the *collected* amount (an intermediary bills the
+  clients; what the owner draws differs from what is invoiced).
+- Invoice issue date (v0.13.0): new `date` field on invoices ("Data
+  fattura" in the create dialog, default today; "Data" column in the
+  table), now the reference for the Fatturato stats and list sorting.
+  Docs created before it fall back to `dateTo` (stats) / `dateFrom`
+  (sorting) and show "—" in the table.
 
 The owner now uses the app with real data (registries created by hand,
 2026 backlog imported): it has passed real usage, not just typecheck.
@@ -152,10 +156,11 @@ npm run format       # prettier --write
   invoiceId?|null }`. A day's total hours = sum of its entries;
   month/year totals come from date-range queries. `invoiceId` set =
   billed and locked (missing = not invoiced).
-- `users/{uid}/invoices` — `{ clientId, number, dateFrom, dateTo, hours,
-  amount, payment?|null }`; hours/amount frozen at creation. `payment`
-  is `{ date, amount, description }`: what was actually collected
-  (missing/null = not yet; can differ from `amount`).
+- `users/{uid}/invoices` — `{ clientId, number, date?, dateFrom, dateTo,
+  hours, amount, payment?|null }`; hours/amount frozen at creation.
+  `date` is the issue date (missing on older docs → fall back to
+  dateTo). `payment` is `{ date, amount, description }`: what was
+  actually collected (missing/null = not yet; can differ from `amount`).
 - `users/{uid}/fiscalYears` — `{ year, regime: 'ordinario'|'forfettario',
   profitabilityIndex|null, forfaitLimit?|null, hardLimit?|null }` (one
   per year, uniqueness enforced in UI; limits € are forfettario-only).

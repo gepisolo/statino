@@ -66,7 +66,9 @@ onMounted(async () => {
 });
 
 function onSaved(i: Invoice) {
-  invoices.value = [...invoices.value, i].sort((a, b) => b.dateFrom.localeCompare(a.dateFrom));
+  invoices.value = [...invoices.value, i].sort((a, b) =>
+    (b.date ?? b.dateFrom).localeCompare(a.date ?? a.dateFrom),
+  );
 }
 
 function openPayment(i: Invoice) {
@@ -126,6 +128,7 @@ async function confirmDelete() {
       <TableHeader>
         <TableRow>
           <TableHead>Numero</TableHead>
+          <TableHead>Data</TableHead>
           <TableHead>Cliente</TableHead>
           <TableHead>Periodo</TableHead>
           <TableHead class="text-right">Ore</TableHead>
@@ -136,12 +139,13 @@ async function confirmDelete() {
       </TableHeader>
       <TableBody>
         <TableRow v-if="!invoices.length">
-          <TableCell colspan="7" class="text-center text-muted-foreground">
+          <TableCell colspan="8" class="text-center text-muted-foreground">
             Nessuna fattura.
           </TableCell>
         </TableRow>
         <TableRow v-for="i in invoices" :key="i.id">
           <TableCell class="font-medium">{{ i.number }}</TableCell>
+          <TableCell class="tabular-nums">{{ i.date ? formatDate(i.date) : '—' }}</TableCell>
           <TableCell>{{ clientNames.get(i.clientId) ?? '—' }}</TableCell>
           <TableCell class="tabular-nums">
             {{ formatDate(i.dateFrom) }} – {{ formatDate(i.dateTo) }}

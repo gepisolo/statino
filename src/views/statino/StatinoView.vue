@@ -217,11 +217,14 @@ const totalMonthAmount = computed(() =>
 const yearStart = computed(() => `${year.value}-01-01`);
 const hasFiscalConfig = computed(() => fiscalYears.value.some((f) => f.year === year.value));
 
-// "Fatturato" of the year up to the selected month: invoices have no
-// issue date, so the end of the billed period (dateTo) is the reference.
+// "Fatturato" of the year up to the selected month, by issue date
+// (older invoices without one fall back to the billed period's end).
 function invoicedAmount(invs: Invoice[]): number {
   return invs
-    .filter((i) => i.dateTo >= yearStart.value && i.dateTo <= monthEnd.value)
+    .filter((i) => {
+      const ref = i.date ?? i.dateTo;
+      return ref >= yearStart.value && ref <= monthEnd.value;
+    })
     .reduce((sum, i) => sum + i.amount, 0);
 }
 

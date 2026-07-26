@@ -83,7 +83,11 @@ export const entriesRepo = {
 // Creating an invoice locks the billed entries (sets their `invoiceId`);
 // deleting it unlocks them. Both run in a single atomic batch.
 export const invoicesRepo = {
-  ...makeRepo<Invoice>('invoices', (a, b) => b.dateFrom.localeCompare(a.dateFrom)),
+  // Newest first by issue date (pre-existing docs without one fall back
+  // to the billed period's start).
+  ...makeRepo<Invoice>('invoices', (a, b) =>
+    (b.date ?? b.dateFrom).localeCompare(a.date ?? a.dateFrom),
+  ),
   async createWithEntries(
     uid: string,
     data: Omit<Invoice, 'id'>,

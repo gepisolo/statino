@@ -20,7 +20,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { entriesRepo, invoicesRepo, extractErrorMessage } from '@/lib/db';
-import { formatEur, formatHours } from '@/lib/format';
+import { formatEur, formatHours, todayIso } from '@/lib/format';
 import { useAuthStore } from '@/stores/auth';
 import type { Client, Contract, Entry, Invoice } from '@/types/models';
 
@@ -39,6 +39,7 @@ const auth = useAuthStore();
 
 const clientId = ref('');
 const number = ref('');
+const date = ref('');
 const dateFrom = ref('');
 const dateTo = ref('');
 const submitting = ref(false);
@@ -72,6 +73,7 @@ const valid = computed(
   () =>
     clientId.value !== '' &&
     number.value.trim().length > 0 &&
+    /^\d{4}-\d{2}-\d{2}$/.test(date.value) &&
     rangeValid.value &&
     billable.value.length > 0,
 );
@@ -82,6 +84,7 @@ watch(
     if (!open) return;
     clientId.value = props.clients.length === 1 ? props.clients[0].id : '';
     number.value = '';
+    date.value = todayIso();
     dateFrom.value = '';
     dateTo.value = '';
     rangeEntries.value = [];
@@ -114,6 +117,7 @@ async function submit() {
       {
         clientId: clientId.value,
         number: number.value.trim(),
+        date: date.value,
         dateFrom: dateFrom.value,
         dateTo: dateTo.value,
         hours: totalHours.value,
@@ -178,7 +182,11 @@ function handleOpenChange(v: boolean) {
           </div>
         </div>
 
-        <div class="grid grid-cols-2 gap-4">
+        <div class="grid grid-cols-3 gap-4">
+          <div class="space-y-2">
+            <Label for="invoice-date">Data fattura</Label>
+            <Input id="invoice-date" v-model="date" type="date" :disabled="submitting" />
+          </div>
           <div class="space-y-2">
             <Label for="invoice-from">Dal</Label>
             <Input id="invoice-from" v-model="dateFrom" type="date" :disabled="submitting" />
