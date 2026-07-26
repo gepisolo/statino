@@ -103,7 +103,7 @@ async function confirmDelete() {
 
 <template>
   <div class="space-y-6">
-    <div class="flex items-start justify-between gap-4">
+    <div class="flex flex-wrap items-start justify-between gap-4">
       <div>
         <h1 class="text-2xl font-semibold tracking-tight">Clienti</h1>
         <p class="text-sm text-muted-foreground">Anagrafica dei clienti a cui fatturi le ore.</p>

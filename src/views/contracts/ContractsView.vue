@@ -138,8 +138,8 @@ async function confirmDelete() {
 
 <template>
   <div class="space-y-6">
-    <div class="flex items-start justify-between gap-4">
-      <div>
+    <div class="flex flex-wrap items-start justify-between gap-4">
+      <div class="min-w-0">
         <h1 class="text-2xl font-semibold tracking-tight">Contratti</h1>
         <p class="text-sm text-muted-foreground">
           Monte ore annuali e tariffe per cliente e attività.
@@ -153,7 +153,7 @@ async function confirmDelete() {
 
     <div class="flex items-center gap-2">
       <Select v-model="clientFilter">
-        <SelectTrigger class="w-56">
+        <SelectTrigger class="w-full sm:w-56">
           <SelectValue placeholder="Tutti i clienti" />
         </SelectTrigger>
         <SelectContent>
@@ -168,7 +168,77 @@ async function confirmDelete() {
       <Skeleton class="h-9 w-full" />
       <Skeleton class="h-9 w-full" />
     </div>
-    <Table v-else>
+    <div v-else class="space-y-3 md:hidden">
+      <div
+        v-if="!filtered.length"
+        class="rounded-lg border border-dashed p-8 text-center text-sm text-muted-foreground"
+      >
+        <template v-if="!clients.length">
+          Prima crea un cliente, poi potrai aggiungere i suoi contratti.
+        </template>
+        <template v-else>Nessun contratto.</template>
+      </div>
+      <div
+        v-for="c in filtered"
+        :key="c.id"
+        class="rounded-lg border bg-card p-4 text-card-foreground"
+      >
+        <div class="flex items-start justify-between gap-2">
+          <div class="min-w-0">
+            <div class="font-medium">{{ clientNames.get(c.clientId) ?? '—' }}</div>
+            <div class="truncate text-sm text-muted-foreground">{{ c.activity }}</div>
+          </div>
+          <DropdownMenu>
+            <DropdownMenuTrigger as-child>
+              <Button variant="ghost" size="icon" class="-mr-2 -mt-2" aria-label="Azioni">
+                <MoreHorizontal class="size-4" />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end">
+              <DropdownMenuItem @select="openEdit(c)">
+                <Pencil class="mr-2 size-4" />
+                Modifica
+              </DropdownMenuItem>
+              <DropdownMenuItem
+                class="text-destructive focus:text-destructive"
+                @select="askDelete(c)"
+              >
+                <Trash2 class="mr-2 size-4" />
+                Elimina…
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+        </div>
+        <dl class="mt-3 space-y-1 text-sm">
+          <div class="flex justify-between gap-4">
+            <dt class="text-muted-foreground">Validità</dt>
+            <dd class="tabular-nums">
+              {{ formatDate(c.startDate) }} – {{ formatDate(c.endDate) }}
+            </dd>
+          </div>
+          <div class="flex justify-between gap-4">
+            <dt class="text-muted-foreground">Monte ore</dt>
+            <dd class="tabular-nums">{{ formatHours(c.annualHours) }} h</dd>
+          </div>
+          <div class="flex justify-between gap-4">
+            <dt class="text-muted-foreground">Costo orario</dt>
+            <dd class="tabular-nums">{{ formatEur(c.hourlyRate) }}</dd>
+          </div>
+          <div class="flex justify-between gap-4">
+            <dt class="text-muted-foreground">Stato</dt>
+            <dd>
+              <span
+                class="rounded-full px-2 py-0.5 text-xs font-medium"
+                :class="stateClasses[stateOf(c)]"
+              >
+                {{ stateOf(c) }}
+              </span>
+            </dd>
+          </div>
+        </dl>
+      </div>
+    </div>
+    <Table v-if="!loading" class="max-md:hidden">
       <TableHeader>
         <TableRow>
           <TableHead>Cliente</TableHead>

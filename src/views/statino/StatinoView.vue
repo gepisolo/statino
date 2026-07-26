@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted, ref, watch } from 'vue';
+import { computed, nextTick, onMounted, ref, watch } from 'vue';
 import { toast } from 'vue-sonner';
 import { ExternalLink, Lock, Pencil, Plus, Trash2 } from '@lucide/vue';
 import { Button } from '@/components/ui/button';
@@ -42,6 +42,7 @@ import {
   monthName,
   todayIso,
   weekdayName,
+  weekdayShortName,
 } from '@/lib/format';
 import { useAuthStore } from '@/stores/auth';
 import type {
@@ -180,6 +181,7 @@ interface DayRow {
   iso: string;
   dayLabel: string;
   weekday: string;
+  weekdayShort: string;
   weekend: boolean;
   isToday: boolean;
   entries: Entry[];
@@ -197,6 +199,7 @@ const days = computed<DayRow[]>(() => {
       iso,
       dayLabel: String(d).padStart(2, '0'),
       weekday: weekdayName(iso),
+      weekdayShort: weekdayShortName(iso),
       weekend: isWeekend(iso),
       isToday: iso === today,
       entries: dayEntries,
@@ -371,18 +374,33 @@ async function confirmDeleteEntry() {
 }
 
 const loading = computed(() => loadingCatalogs.value || loadingEntries.value);
+
+// The mobile FAB adds hours to today, so it only makes sense while the
+// grid is showing the current month.
+const viewingCurrentMonth = computed(
+  () => year.value === now.getFullYear() && month.value === now.getMonth() + 1,
+);
+
+// On the phone the current day can be 20+ rows down: once entries are in,
+// bring today into view instead of forcing a scroll past the whole month.
+watch(loading, async (isLoading) => {
+  if (isLoading || !clientId.value || !viewingCurrentMonth.value) return;
+  if (!window.matchMedia('(max-width: 767px)').matches) return;
+  await nextTick();
+  document.querySelector('[data-today]')?.scrollIntoView({ block: 'center' });
+});
 </script>
 
 <template>
-  <div class="space-y-6">
+  <div class="space-y-6 pb-20 md:pb-0">
     <div class="flex flex-wrap items-end justify-between gap-4">
       <div>
         <h1 class="text-2xl font-semibold tracking-tight">Statino</h1>
         <p class="text-sm text-muted-foreground">Ore giornaliere per cliente e contratto.</p>
       </div>
-      <div class="flex flex-wrap items-center gap-2">
+      <div class="grid w-full grid-cols-2 gap-2 sm:flex sm:w-auto sm:flex-wrap sm:items-center">
         <Select v-model="year">
-          <SelectTrigger class="w-28">
+          <SelectTrigger class="w-full sm:w-28">
             <SelectValue />
           </SelectTrigger>
           <SelectContent>
@@ -390,7 +408,7 @@ const loading = computed(() => loadingCatalogs.value || loadingEntries.value);
           </SelectContent>
         </Select>
         <Select v-model="month">
-          <SelectTrigger class="w-36">
+          <SelectTrigger class="w-full sm:w-36">
             <SelectValue />
           </SelectTrigger>
           <SelectContent>
@@ -400,7 +418,7 @@ const loading = computed(() => loadingCatalogs.value || loadingEntries.value);
           </SelectContent>
         </Select>
         <Select v-model="clientId">
-          <SelectTrigger class="w-52">
+          <SelectTrigger class="col-span-2 w-full sm:col-span-1 sm:w-52">
             <SelectValue placeholder="Seleziona un cliente" />
           </SelectTrigger>
           <SelectContent>
@@ -440,9 +458,9 @@ const loading = computed(() => loadingCatalogs.value || loadingEntries.value);
         <table class="w-full text-sm">
           <thead>
             <tr class="border-b bg-muted/50 text-left text-xs uppercase text-muted-foreground">
-              <th class="w-36 px-3 py-2 font-medium">Giorno</th>
-              <th class="px-3 py-2 font-medium">Attività</th>
-              <th class="w-16 px-3 py-2 text-right font-medium">Ore</th>
+              <th class="w-20 px-2 py-2 font-medium sm:w-36 sm:px-3">Giorno</th>
+              <th class="px-2 py-2 font-medium sm:px-3">Attività</th>
+              <th class="w-12 px-2 py-2 text-right font-medium sm:w-16 sm:px-3">Ore</th>
               <th class="w-10 px-1 py-2" />
             </tr>
           </thead>
@@ -455,12 +473,16 @@ const loading = computed(() => loadingCatalogs.value || loadingEntries.value);
                 day.weekend ? 'bg-rose-50 dark:bg-rose-950/30' : '',
                 day.isToday ? 'ring-2 ring-inset ring-primary/30' : '',
               ]"
+              :data-today="day.isToday ? '' : undefined"
             >
-              <td class="whitespace-nowrap px-3 py-1.5 align-top">
+              <td class="whitespace-nowrap px-2 py-1.5 align-top sm:px-3">
                 <span class="font-medium tabular-nums">{{ day.dayLabel }}</span>
-                <span class="ml-2 text-xs text-muted-foreground">{{ day.weekday }}</span>
+                <span class="ml-1.5 text-xs text-muted-foreground sm:ml-2">
+                  <span class="sm:hidden">{{ day.weekdayShort }}</span>
+                  <span class="hidden sm:inline">{{ day.weekday }}</span>
+                </span>
               </td>
-              <td class="px-3 py-1.5">
+              <td class="px-2 py-1.5 sm:px-3">
                 <div v-if="day.entries.length" class="space-y-1">
                   <div
                     v-for="e in day.entries"
@@ -500,36 +522,38 @@ const loading = computed(() => loadingCatalogs.value || loadingEntries.value);
                       class="size-3 text-muted-foreground"
                       aria-label="Attività fatturata"
                     />
-                    <span class="inline-flex opacity-0 transition-opacity group-hover:opacity-100">
+                    <span
+                      class="inline-flex transition-opacity pointer-fine:opacity-0 pointer-fine:group-focus-within:opacity-100 pointer-fine:group-hover:opacity-100"
+                    >
                       <button
-                        class="rounded p-0.5 text-muted-foreground hover:text-foreground"
+                        class="rounded p-0.5 text-muted-foreground hover:text-foreground pointer-coarse:p-2"
                         aria-label="Modifica attività"
                         @click="openEditEntry(e)"
                       >
-                        <Pencil class="size-3" />
+                        <Pencil class="size-3 pointer-coarse:size-4" />
                       </button>
                       <button
                         v-if="!e.invoiceId"
-                        class="rounded p-0.5 text-muted-foreground hover:text-destructive"
+                        class="rounded p-0.5 text-muted-foreground hover:text-destructive pointer-coarse:p-2"
                         aria-label="Elimina attività"
                         @click="askDeleteEntry(e)"
                       >
-                        <Trash2 class="size-3" />
+                        <Trash2 class="size-3 pointer-coarse:size-4" />
                       </button>
                     </span>
                   </div>
                 </div>
               </td>
-              <td class="px-3 py-1.5 text-right align-top tabular-nums">
+              <td class="px-2 py-1.5 text-right align-top tabular-nums sm:px-3">
                 <span v-if="day.hours">{{ formatHours(day.hours) }}</span>
               </td>
               <td class="px-1 py-1 text-right align-top">
                 <button
-                  class="rounded p-1 text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground"
+                  class="rounded p-1 text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground pointer-coarse:p-2.5"
                   aria-label="Aggiungi attività"
                   @click="openAddEntry(day.iso)"
                 >
-                  <Plus class="size-3.5" />
+                  <Plus class="size-3.5 pointer-coarse:size-5" />
                 </button>
               </td>
             </tr>
@@ -703,6 +727,15 @@ const loading = computed(() => loadingCatalogs.value || loadingEntries.value);
         </Card>
       </aside>
     </div>
+
+    <button
+      v-if="!loading && clientId && viewingCurrentMonth"
+      class="fixed bottom-[max(1.25rem,env(safe-area-inset-bottom))] right-4 z-30 flex size-14 items-center justify-center rounded-full bg-primary text-primary-foreground shadow-lg transition-transform active:scale-95 md:hidden"
+      aria-label="Aggiungi attività per oggi"
+      @click="openAddEntry(todayIso())"
+    >
+      <Plus class="size-6" />
+    </button>
 
     <EntryFormDialog
       v-model:open="entryFormOpen"

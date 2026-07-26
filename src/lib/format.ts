@@ -44,6 +44,13 @@ export function weekdayName(iso: string): string {
   return weekdayFmt.format(new Date(y, m - 1, d));
 }
 
+const weekdayShortFmt = new Intl.DateTimeFormat('it-IT', { weekday: 'short' });
+
+export function weekdayShortName(iso: string): string {
+  const [y, m, d] = iso.split('-').map(Number);
+  return weekdayShortFmt.format(new Date(y, m - 1, d));
+}
+
 export function isWeekend(iso: string): boolean {
   const [y, m, d] = iso.split('-').map(Number);
   const dow = new Date(y, m - 1, d).getDay();

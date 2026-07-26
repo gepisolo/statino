@@ -105,8 +105,8 @@ async function confirmDelete() {
 
 <template>
   <div class="space-y-6">
-    <div class="flex items-start justify-between gap-4">
-      <div>
+    <div class="flex flex-wrap items-start justify-between gap-4">
+      <div class="min-w-0">
         <h1 class="text-2xl font-semibold tracking-tight">Fatture</h1>
         <p class="text-sm text-muted-foreground">
           Ogni fattura conteggia e blocca le attività del periodo: restano visibili nello statino ma
@@ -124,7 +124,79 @@ async function confirmDelete() {
       <Skeleton class="h-9 w-full" />
       <Skeleton class="h-9 w-full" />
     </div>
-    <Table v-else>
+    <div v-else class="space-y-3 md:hidden">
+      <div
+        v-if="!invoices.length"
+        class="rounded-lg border border-dashed p-8 text-center text-sm text-muted-foreground"
+      >
+        Nessuna fattura.
+      </div>
+      <div
+        v-for="i in invoices"
+        :key="i.id"
+        class="rounded-lg border bg-card p-4 text-card-foreground"
+      >
+        <div class="flex items-start justify-between gap-2">
+          <div class="min-w-0">
+            <div class="font-medium">{{ i.number }}</div>
+            <div class="truncate text-sm text-muted-foreground">
+              {{ clientNames.get(i.clientId) ?? '—' }}
+            </div>
+          </div>
+          <DropdownMenu>
+            <DropdownMenuTrigger as-child>
+              <Button variant="ghost" size="icon" class="-mr-2 -mt-2" aria-label="Azioni">
+                <MoreHorizontal class="size-4" />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end">
+              <DropdownMenuItem @select="openPayment(i)">
+                <Banknote class="mr-2 size-4" />
+                {{ i.payment ? 'Modifica incasso…' : 'Registra incasso…' }}
+              </DropdownMenuItem>
+              <DropdownMenuItem
+                class="text-destructive focus:text-destructive"
+                @select="askDelete(i)"
+              >
+                <Trash2 class="mr-2 size-4" />
+                Elimina…
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+        </div>
+        <dl class="mt-3 space-y-1 text-sm">
+          <div class="flex justify-between gap-4">
+            <dt class="text-muted-foreground">Data</dt>
+            <dd class="tabular-nums">{{ i.date ? formatDate(i.date) : '—' }}</dd>
+          </div>
+          <div class="flex justify-between gap-4">
+            <dt class="text-muted-foreground">Periodo</dt>
+            <dd class="tabular-nums">{{ formatDate(i.dateFrom) }} – {{ formatDate(i.dateTo) }}</dd>
+          </div>
+          <div class="flex justify-between gap-4">
+            <dt class="text-muted-foreground">Ore</dt>
+            <dd class="tabular-nums">{{ formatHours(i.hours) }}</dd>
+          </div>
+          <div class="flex justify-between gap-4">
+            <dt class="text-muted-foreground">Importo</dt>
+            <dd class="font-medium tabular-nums">{{ formatEur(i.amount) }}</dd>
+          </div>
+          <div class="flex justify-between gap-4">
+            <dt class="text-muted-foreground">Incassato</dt>
+            <dd class="text-right tabular-nums">
+              <template v-if="i.payment">
+                {{ formatEur(i.payment.amount) }}
+                <span class="text-xs text-muted-foreground">
+                  · {{ formatDate(i.payment.date) }}
+                </span>
+              </template>
+              <template v-else>—</template>
+            </dd>
+          </div>
+        </dl>
+      </div>
+    </div>
+    <Table v-if="!loading" class="max-md:hidden">
       <TableHeader>
         <TableRow>
           <TableHead>Numero</TableHead>

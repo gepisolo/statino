@@ -205,6 +205,7 @@ function handleOpenChange(v: boolean) {
               id="entry-hours"
               v-model="hours"
               type="number"
+              inputmode="decimal"
               min="0.25"
               step="0.25"
               placeholder="2"

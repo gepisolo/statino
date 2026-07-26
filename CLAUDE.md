@@ -4,7 +4,7 @@ Personal timesheet app ("statino") replacing an Excel sheet: hours logged
 per day, per client, against yearly contracts. Single user (Google login),
 data on Firestore. UI language: Italian.
 
-## Status (2026-07-26, v0.15.0)
+## Status (2026-07-27, v0.16.0)
 
 **Done and deployed** to https://statino-gepisolo.web.app (CI green):
 
@@ -93,6 +93,24 @@ data on Firestore. UI language: Italian.
   (SVG grouped bars ≤3 series, hover tooltip, validated palette
   blue/orange/aqua, light+dark), `StatTile.vue`, `LimitMeter.vue`
   (status colors with icon+label). Charts never mix units (hours vs €).
+
+- Mobile adaptation (v0.16.0): the app is now usable from the phone.
+  `AppShell.vue`: sidebar hidden below `md`, replaced by a sticky top
+  bar (hamburger) + slide-in overlay drawer sharing the same nav markup
+  (closes on navigation/backdrop/Escape, body scroll locked);
+  `viewport-fit=cover` + `env(safe-area-inset-*)` paddings. Statino
+  view: selectors become a 2-col grid on mobile (client full width);
+  short weekday + tighter cells below `sm`; entry edit/delete buttons
+  always visible on touch (`pointer-fine:` hides them behind hover);
+  bigger touch targets via `pointer-coarse:` variants; mobile-only FAB
+  "aggiungi oggi" (visible when a client is selected and the grid shows
+  the current month) and auto scroll-to-today on phones. Invoices and
+  contracts tables render as card lists below `md` (same data + ⋯
+  menu). Page headers wrap; `weekdayShortName()` added to
+  `lib/format.ts`; hours input gets `inputmode="decimal"`. Impeccable
+  skill artifacts added: `PRODUCT.md` (product truth: entry speed is
+  the value to protect; mobile is a confirmed usage scene) and
+  `.impeccable/live/config.json`.
 
 The owner now uses the app with real data (registries created by hand,
 2026 backlog imported): it has passed real usage, not just typecheck.
