@@ -22,6 +22,12 @@ export function formatHours(n: number): string {
   return hoursFmt.format(n);
 }
 
+const percentFmt = new Intl.NumberFormat('it-IT', { maximumFractionDigits: 1 });
+
+export function formatPercent(n: number): string {
+  return `${percentFmt.format(n)}%`;
+}
+
 // Numeric form fields can hold either a string or a number: Vue
 // auto-casts native `type="number"` inputs to number, but the field
 // starts as (and can revert to) the empty string. Accepts the Italian

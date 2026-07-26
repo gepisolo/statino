@@ -4,7 +4,7 @@ Personal timesheet app ("statino") replacing an Excel sheet: hours logged
 per day, per client, against yearly contracts. Single user (Google login),
 data on Firestore. UI language: Italian.
 
-## Status (2026-07-27, v0.16.0)
+## Status (2026-07-27, v0.17.0)
 
 **Done and deployed** to https://statino-gepisolo.web.app (CI green):
 
@@ -111,6 +111,13 @@ data on Firestore. UI language: Italian.
   skill artifacts added: `PRODUCT.md` (product truth: entry speed is
   the value to protect; mobile is a confirmed usage scene) and
   `.impeccable/live/config.json`.
+
+- Carico fiscale card (v0.17.0): "Statistiche per mese" gained a
+  "Carico fiscale" card (next to the forfettario limit meter when
+  present): Tasse, Contributi, Totale da accantonare (from
+  `computeNet`'s existing breakdown on the year's collected amount)
+  and "Carico fiscale medio" % (due / incassato). `formatPercent()`
+  added to `lib/format.ts`.
 
 The owner now uses the app with real data (registries created by hand,
 2026 backlog imported): it has passed real usage, not just typecheck.

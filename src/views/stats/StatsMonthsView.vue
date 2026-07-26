@@ -29,7 +29,7 @@ import {
   taxRatesRepo,
   extractErrorMessage,
 } from '@/lib/db';
-import { formatEur, formatHours, monthName } from '@/lib/format';
+import { formatEur, formatHours, formatPercent, monthName } from '@/lib/format';
 import { elapsedMonths, monthRange, periodTotals } from '@/lib/stats';
 import { computeNet } from '@/lib/tax';
 import { useAuthStore } from '@/stores/auth';
@@ -132,6 +132,12 @@ const yearNet = computed(() => netOf(yearTotals.value.collected));
 const divisor = computed(() => elapsedMonths(year.value, now));
 const projectedBillable = computed(() => (yearTotals.value.billable / divisor.value) * 12);
 
+// Carico fiscale medio: tasse + contributi rispetto all'incassato.
+const taxLoadPct = computed(() => {
+  if (!yearNet.value || yearTotals.value.collected <= 0) return null;
+  return (yearNet.value.due / yearTotals.value.collected) * 100;
+});
+
 const fiscalYear = computed(() => fiscalYears.value.find((f) => f.year === year.value));
 const limits = computed(() => {
   const f = fiscalYear.value;
@@ -217,15 +223,51 @@ function eurTick(n: number): string {
         del {{ year }}.
       </p>
 
-      <Card v-if="limits">
-        <CardContent class="pt-6">
-          <LimitMeter
-            :invoiced="yearTotals.invoiced"
-            :forfait-limit="limits.forfait"
-            :hard-limit="limits.hard"
-          />
-        </CardContent>
-      </Card>
+      <div v-if="yearNet || limits" class="grid gap-6 xl:grid-cols-2">
+        <Card v-if="yearNet">
+          <CardHeader>
+            <CardTitle class="text-base">Carico fiscale — anno {{ year }}</CardTitle>
+          </CardHeader>
+          <CardContent class="space-y-1">
+            <p class="pb-1 text-xs text-muted-foreground">
+              Calcolato sull'incassato; la somma è il "da accantonare".
+            </p>
+            <div class="flex items-baseline justify-between">
+              <span class="text-sm text-muted-foreground">Tasse</span>
+              <span class="text-base font-medium tabular-nums">
+                {{ formatEur(yearNet.taxes) }}
+              </span>
+            </div>
+            <div class="flex items-baseline justify-between">
+              <span class="text-sm text-muted-foreground">Contributi</span>
+              <span class="text-base font-medium tabular-nums">
+                {{ formatEur(yearNet.contributions) }}
+              </span>
+            </div>
+            <div class="flex items-baseline justify-between">
+              <span class="text-sm text-muted-foreground">Totale da accantonare</span>
+              <span class="text-base font-semibold tabular-nums">
+                {{ formatEur(yearNet.due) }}
+              </span>
+            </div>
+            <div class="mt-2 flex items-baseline justify-between border-t pt-2">
+              <span class="text-sm text-muted-foreground">Carico fiscale medio</span>
+              <span class="text-xl font-semibold tabular-nums">
+                {{ taxLoadPct != null ? formatPercent(taxLoadPct) : '—' }}
+              </span>
+            </div>
+          </CardContent>
+        </Card>
+        <Card v-if="limits">
+          <CardContent class="pt-6">
+            <LimitMeter
+              :invoiced="yearTotals.invoiced"
+              :forfait-limit="limits.forfait"
+              :hard-limit="limits.hard"
+            />
+          </CardContent>
+        </Card>
+      </div>
 
       <div class="grid gap-6 xl:grid-cols-2">
         <Card>
