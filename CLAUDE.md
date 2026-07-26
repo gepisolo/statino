@@ -4,7 +4,7 @@ Personal timesheet app ("statino") replacing an Excel sheet: hours logged
 per day, per client, against yearly contracts. Single user (Google login),
 data on Firestore. UI language: Italian.
 
-## Status (2026-07-26, v0.11.0)
+## Status (2026-07-26, v0.12.0)
 
 **Done and deployed** to https://statino-gepisolo.web.app (CI green):
 
@@ -61,16 +61,25 @@ data on Firestore. UI language: Italian.
   (`InvoicePaymentFormDialog.vue`, amount prefilled with the invoice
   total, "Rimuovi incasso" button when set); "Incassato" column in the
   table (amount + date, description as tooltip).
+- Net-income calc + statino stats cards (v0.12.0): `lib/tax.ts`
+  `computeNet()` — first consumer of `fiscalYears`+`taxRates`
+  (forfettario: gross × profitability index → taxable; each rate row
+  taxes its own bracket slice; ordinario: taxable = gross; null if the
+  year has no fiscal profile). Statino side panel: month card gained
+  "Netto previsto" and "Da accantonare" (on the month's billable
+  amount); two new cards, per-client and all-clients, with year-to-
+  selected-month Fatturato (reference date: invoice `dateTo` — there is
+  no issue date), Incassato (by `payment.date`) and Netto computed on
+  the *collected* amount (an intermediary bills the clients; what the
+  owner draws differs from what is invoiced).
 
 The owner now uses the app with real data (registries created by hand,
 2026 backlog imported): it has passed real usage, not just typecheck.
 
 **Not yet done / next**:
 
-- Net-income calc ("netto previsto" in the old Excel): consume
-  `fiscalYears` + `taxRates` — with forfettario: billed × profitability
-  index → taxable income → contribution/tax brackets. Settings (v0.9.0)
-  exist precisely for this; nothing reads them yet.
+- Nothing consumes `forfaitLimit`/`hardLimit` yet (e.g. warnings when
+  the year's invoiced total approaches/crosses the limits).
 - Invoices have no edit (delete + recreate is the flow) and entries
   already invoiced are never re-counted by overlapping periods — both
   deliberate choices, revisit only if asked.

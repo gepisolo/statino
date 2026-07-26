@@ -25,9 +25,13 @@ import {
   clientsRepo,
   contractsRepo,
   entriesRepo,
+  fiscalYearsRepo,
+  invoicesRepo,
   projectsRepo,
+  taxRatesRepo,
   extractErrorMessage,
 } from '@/lib/db';
+import { computeNet } from '@/lib/tax';
 import {
   daysInMonth,
   formatDate,
@@ -40,7 +44,15 @@ import {
   weekdayName,
 } from '@/lib/format';
 import { useAuthStore } from '@/stores/auth';
-import type { Client, Contract, Entry, Project } from '@/types/models';
+import type {
+  Client,
+  Contract,
+  Entry,
+  FiscalYear,
+  Invoice,
+  Project,
+  TaxRate,
+} from '@/types/models';
 
 const auth = useAuthStore();
 
@@ -56,6 +68,9 @@ const loadingEntries = ref(true);
 const clients = ref<Client[]>([]);
 const contracts = ref<Contract[]>([]);
 const projects = ref<Project[]>([]);
+const invoices = ref<Invoice[]>([]);
+const fiscalYears = ref<FiscalYear[]>([]);
+const taxRates = ref<TaxRate[]>([]);
 // All entries of the selected calendar year (any client) — the summary
 // panel needs the year to compute progress against the annual allowance.
 const entries = ref<Entry[]>([]);
@@ -78,10 +93,20 @@ const monthOptions = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12];
 
 onMounted(async () => {
   try {
-    [clients.value, contracts.value, projects.value] = await Promise.all([
+    [
+      clients.value,
+      contracts.value,
+      projects.value,
+      invoices.value,
+      fiscalYears.value,
+      taxRates.value,
+    ] = await Promise.all([
       clientsRepo.list(auth.uid!),
       contractsRepo.list(auth.uid!),
       projectsRepo.list(auth.uid!),
+      invoicesRepo.list(auth.uid!),
+      fiscalYearsRepo.list(auth.uid!),
+      taxRatesRepo.list(auth.uid!),
     ]);
     const last = localStorage.getItem(LAST_CLIENT_KEY);
     if (last && clients.value.some((c) => c.id === last)) {
@@ -188,6 +213,45 @@ const totalMonthAmount = computed(() =>
     0,
   ),
 );
+
+const yearStart = computed(() => `${year.value}-01-01`);
+const hasFiscalConfig = computed(() => fiscalYears.value.some((f) => f.year === year.value));
+
+// "Fatturato" of the year up to the selected month: invoices have no
+// issue date, so the end of the billed period (dateTo) is the reference.
+function invoicedAmount(invs: Invoice[]): number {
+  return invs
+    .filter((i) => i.dateTo >= yearStart.value && i.dateTo <= monthEnd.value)
+    .reduce((sum, i) => sum + i.amount, 0);
+}
+
+// "Incassato": what counts is the collection date, wherever the billed
+// period falls (the intermediary decides amounts and timing).
+function collectedAmount(invs: Invoice[]): number {
+  return invs
+    .filter(
+      (i) => i.payment && i.payment.date >= yearStart.value && i.payment.date <= monthEnd.value,
+    )
+    .reduce((sum, i) => sum + (i.payment?.amount ?? 0), 0);
+}
+
+const netOf = (gross: number) => computeNet(gross, year.value, fiscalYears.value, taxRates.value);
+
+// Netto previsto on the month's billable amount. Exact with flat rates;
+// with progressive brackets it's the month taken in isolation.
+const monthNet = computed(() => netOf(totalMonthAmount.value));
+
+const clientInvoices = computed(() => invoices.value.filter((i) => i.clientId === clientId.value));
+const clientInvoiced = computed(() => invoicedAmount(clientInvoices.value));
+const clientCollected = computed(() => collectedAmount(clientInvoices.value));
+// Net on what was actually collected, not on what was invoiced.
+const clientNet = computed(() => netOf(clientCollected.value));
+
+const allInvoiced = computed(() => invoicedAmount(invoices.value));
+const allCollected = computed(() => collectedAmount(invoices.value));
+const allNet = computed(() => netOf(allCollected.value));
+
+const clientName = computed(() => clients.value.find((c) => c.id === clientId.value)?.name ?? '');
 
 interface ContractSummary {
   contract: Contract;
@@ -485,6 +549,23 @@ const loading = computed(() => loadingCatalogs.value || loadingEntries.value);
                 {{ formatEur(totalMonthAmount) }}
               </span>
             </div>
+            <div class="flex items-baseline justify-between">
+              <span class="text-sm text-muted-foreground">Netto previsto</span>
+              <span class="text-base font-medium tabular-nums">
+                {{ monthNet ? formatEur(monthNet.net) : '—' }}
+              </span>
+            </div>
+            <div class="flex items-baseline justify-between">
+              <span class="text-sm text-muted-foreground">Da accantonare</span>
+              <span class="text-base font-medium tabular-nums">
+                {{ monthNet ? formatEur(monthNet.due) : '—' }}
+              </span>
+            </div>
+            <p v-if="!hasFiscalConfig" class="pt-1 text-xs text-muted-foreground">
+              Per il netto configura i
+              <RouterLink to="/settings" class="underline">dati fiscali</RouterLink>
+              del {{ year }}.
+            </p>
           </CardContent>
         </Card>
 
@@ -539,6 +620,60 @@ const loading = computed(() => loadingCatalogs.value || loadingEntries.value);
                   </dd>
                 </div>
               </dl>
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle class="text-base">{{ clientName }} — anno {{ year }}</CardTitle>
+          </CardHeader>
+          <CardContent class="space-y-1">
+            <p class="pb-1 text-xs text-muted-foreground">
+              Fino a {{ monthName(month) }}; l'incassato conta per data di incasso.
+            </p>
+            <div class="flex items-baseline justify-between">
+              <span class="text-sm text-muted-foreground">Fatturato</span>
+              <span class="text-base font-medium tabular-nums">
+                {{ formatEur(clientInvoiced) }}
+              </span>
+            </div>
+            <div class="flex items-baseline justify-between">
+              <span class="text-sm text-muted-foreground">Incassato</span>
+              <span class="text-base font-medium tabular-nums">
+                {{ formatEur(clientCollected) }}
+              </span>
+            </div>
+            <div class="flex items-baseline justify-between">
+              <span class="text-sm text-muted-foreground">Netto (su incassato)</span>
+              <span class="text-base font-semibold tabular-nums">
+                {{ clientNet ? formatEur(clientNet.net) : '—' }}
+              </span>
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle class="text-base">Tutti i clienti — anno {{ year }}</CardTitle>
+          </CardHeader>
+          <CardContent class="space-y-1">
+            <p class="pb-1 text-xs text-muted-foreground">
+              Fino a {{ monthName(month) }}; l'incassato conta per data di incasso.
+            </p>
+            <div class="flex items-baseline justify-between">
+              <span class="text-sm text-muted-foreground">Fatturato</span>
+              <span class="text-base font-medium tabular-nums">{{ formatEur(allInvoiced) }}</span>
+            </div>
+            <div class="flex items-baseline justify-between">
+              <span class="text-sm text-muted-foreground">Incassato</span>
+              <span class="text-base font-medium tabular-nums">{{ formatEur(allCollected) }}</span>
+            </div>
+            <div class="flex items-baseline justify-between">
+              <span class="text-sm text-muted-foreground">Netto (su incassato)</span>
+              <span class="text-base font-semibold tabular-nums">
+                {{ allNet ? formatEur(allNet.net) : '—' }}
+              </span>
             </div>
           </CardContent>
         </Card>
