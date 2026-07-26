@@ -215,6 +215,17 @@ const totalMonthAmount = computed(() =>
 );
 
 const yearStart = computed(() => `${year.value}-01-01`);
+
+// "Fatturabile": every activity of the year up to the selected month at
+// its contract rate, whether already invoiced or not.
+function billableAmount(ents: Entry[]): number {
+  return ents
+    .filter((e) => e.date <= monthEnd.value)
+    .reduce((sum, e) => sum + e.hours * (contractById.value.get(e.contractId)?.hourlyRate ?? 0), 0);
+}
+
+const clientBillable = computed(() => billableAmount(clientYearEntries.value));
+const allBillable = computed(() => billableAmount(entries.value));
 const hasFiscalConfig = computed(() => fiscalYears.value.some((f) => f.year === year.value));
 
 // "Fatturato" of the year up to the selected month, by issue date
@@ -636,6 +647,12 @@ const loading = computed(() => loadingCatalogs.value || loadingEntries.value);
               Fino a {{ monthName(month) }}; l'incassato conta per data di incasso.
             </p>
             <div class="flex items-baseline justify-between">
+              <span class="text-sm text-muted-foreground">Fatturabile</span>
+              <span class="text-base font-medium tabular-nums">
+                {{ formatEur(clientBillable) }}
+              </span>
+            </div>
+            <div class="flex items-baseline justify-between">
               <span class="text-sm text-muted-foreground">Fatturato</span>
               <span class="text-base font-medium tabular-nums">
                 {{ formatEur(clientInvoiced) }}
@@ -664,6 +681,10 @@ const loading = computed(() => loadingCatalogs.value || loadingEntries.value);
             <p class="pb-1 text-xs text-muted-foreground">
               Fino a {{ monthName(month) }}; l'incassato conta per data di incasso.
             </p>
+            <div class="flex items-baseline justify-between">
+              <span class="text-sm text-muted-foreground">Fatturabile</span>
+              <span class="text-base font-medium tabular-nums">{{ formatEur(allBillable) }}</span>
+            </div>
             <div class="flex items-baseline justify-between">
               <span class="text-sm text-muted-foreground">Fatturato</span>
               <span class="text-base font-medium tabular-nums">{{ formatEur(allInvoiced) }}</span>

@@ -4,7 +4,7 @@ Personal timesheet app ("statino") replacing an Excel sheet: hours logged
 per day, per client, against yearly contracts. Single user (Google login),
 data on Firestore. UI language: Italian.
 
-## Status (2026-07-26, v0.13.0)
+## Status (2026-07-26, v0.14.0)
 
 **Done and deployed** to https://statino-gepisolo.web.app (CI green):
 
@@ -76,6 +76,9 @@ data on Firestore. UI language: Italian.
   table), now the reference for the Fatturato stats and list sorting.
   Docs created before it fall back to `dateTo` (stats) / `dateFrom`
   (sorting) and show "—" in the table.
+- Fatturabile row (v0.14.0): the per-client and all-clients statino
+  cards also show "Fatturabile" — every activity of the year up to the
+  selected month at its contract rate, invoiced or not.
 
 The owner now uses the app with real data (registries created by hand,
 2026 backlog imported): it has passed real usage, not just typecheck.
