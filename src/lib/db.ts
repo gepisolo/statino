@@ -20,6 +20,8 @@ import type {
   Invoice,
   InvoicePayment,
   Project,
+  Task,
+  TaskStatus,
   TaxRate,
 } from '@/types/models';
 
@@ -145,6 +147,26 @@ export const invoicesRepo = {
       batch.update(d.ref, { invoiceId: null });
     }
     batch.delete(doc(db, 'users', uid, 'invoices', id));
+    await batch.commit();
+  },
+};
+
+// Kanban tasks, sorted by manual position. A drop rewrites the whole
+// target column's orders (and possibly the moved task's status) in one
+// batch: volumes are tiny.
+export const tasksRepo = {
+  ...makeRepo<Task>('tasks', (a, b) => a.order - b.order),
+  async reorder(
+    uid: string,
+    updates: { id: string; order: number; status?: TaskStatus }[],
+  ): Promise<void> {
+    const batch = writeBatch(db);
+    for (const u of updates) {
+      batch.update(
+        doc(db, 'users', uid, 'tasks', u.id),
+        u.status ? { order: u.order, status: u.status } : { order: u.order },
+      );
+    }
     await batch.commit();
   },
 };

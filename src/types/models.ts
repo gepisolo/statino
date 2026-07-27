@@ -85,6 +85,25 @@ export interface InvoicePayment {
   description: string;
 }
 
+// Kanban board of activities ("Attività"), separate from statino
+// entries. `num` is a human-facing auto-increment; `order` is the
+// manual position inside a column (lower = higher up), assigned so a
+// task entering a column lands on top. Archiving keeps the done
+// outcome (`archived` flag instead of a status) so OK/KO survives.
+// `hours` (optional) only makes sense once done.
+export type TaskStatus = 'todo' | 'wip' | 'done_ok' | 'done_ko';
+export interface Task {
+  id: string;
+  num: number;
+  clientId: string;
+  title: string;
+  description: string;
+  status: TaskStatus;
+  archived: boolean;
+  hours: number | null;
+  order: number;
+}
+
 // A discount applied at invoice creation: `amount` (€) is subtracted
 // from the billed hours×rate, `reason` says why.
 export interface InvoiceDiscount {

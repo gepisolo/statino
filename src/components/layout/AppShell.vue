@@ -4,6 +4,7 @@ import { RouterLink, RouterView, useRoute } from 'vue-router';
 import {
   CalendarDays,
   ChartColumnBig,
+  ListTodo,
   Users,
   FileText,
   Receipt,
@@ -37,6 +38,7 @@ interface NavGroup {
 
 const nav = computed<(NavLink | NavGroup)[]>(() => [
   { name: 'statino', label: 'Statino', to: '/', icon: CalendarDays },
+  { name: 'tasks', label: 'Attività', to: '/tasks', icon: ListTodo },
   { name: 'clients', label: 'Clienti', to: '/clients', icon: Users },
   { name: 'contracts', label: 'Contratti', to: '/contracts', icon: FileText },
   { name: 'invoices', label: 'Fatture', to: '/invoices', icon: Receipt },

@@ -26,6 +26,11 @@ export const router = createRouter({
           component: () => import('@/views/statino/StatinoView.vue'),
         },
         {
+          path: 'tasks',
+          name: 'tasks',
+          component: () => import('@/views/tasks/TasksView.vue'),
+        },
+        {
           path: 'clients',
           name: 'clients',
           component: () => import('@/views/clients/ClientsView.vue'),

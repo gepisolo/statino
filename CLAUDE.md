@@ -4,7 +4,7 @@ Personal timesheet app ("statino") replacing an Excel sheet: hours logged
 per day, per client, against yearly contracts. Single user (Google login),
 data on Firestore. UI language: Italian.
 
-## Status (2026-07-27, v0.24.0)
+## Status (2026-07-27, v0.25.0)
 
 **Done and deployed** to https://statino-gepisolo.web.app (CI green):
 
@@ -181,6 +181,25 @@ data on Firestore. UI language: Italian.
   `statino-<cliente>-<YYYY-MM>.pdf`. Deliberately hours-only — no
   rates or amounts, it's a client-facing report of the grid, not the
   side cards.
+
+- Tasks kanban (v0.25.0): "Attività" sidebar entry (`/tasks`,
+  `views/tasks/TasksView.vue`) with tabs Attive|Archivio. Active tab:
+  TODO / WIP / Done columns; + on TODO creates
+  (`components/tasks/TaskFormDialog.vue`: num auto-increment, cliente,
+  attività, descrizione). Cards show client+title only; click opens
+  the dialog (everything editable, incl. stato TODO/WIP/Done OK/Done
+  KO/Archiviata — the last only offered from done; picking Done OK/KO
+  reveals an optional Ore field). New `users/{uid}/tasks` docs:
+  `{ num, clientId, title, description, status
+  todo|wip|done_ok|done_ko, archived, hours|null, order }` — archiving
+  is a flag so the OK/KO outcome (and its green/red tint) survives in
+  the Archivio list. Ordering: `order` asc per column, entering a
+  column lands on top (min−1); HTML5 drag & drop reorders and moves
+  between columns (drop on Done defaults to Done OK; a drop rewrites
+  the target column's orders via `tasksRepo.reorder` batch,
+  optimistic local update). DnD is desktop-only; on touch the dialog's
+  status select covers the same moves. No rules change needed
+  (`users/{uid}/{document=**}`).
 
 The owner now uses the app with real data (registries created by hand,
 2026 backlog imported): it has passed real usage, not just typecheck.
