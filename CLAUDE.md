@@ -4,7 +4,7 @@ Personal timesheet app ("statino") replacing an Excel sheet: hours logged
 per day, per client, against yearly contracts. Single user (Google login),
 data on Firestore. UI language: Italian.
 
-## Status (2026-07-27, v0.17.0)
+## Status (2026-07-27, v0.18.0)
 
 **Done and deployed** to https://statino-gepisolo.web.app (CI green):
 
@@ -118,6 +118,16 @@ data on Firestore. UI language: Italian.
   `computeNet`'s existing breakdown on the year's collected amount)
   and "Carico fiscale medio" % (due / incassato). `formatPercent()`
   added to `lib/format.ts`.
+
+- Italian date picker (v0.18.0): the six native `type="date"` inputs
+  (contract start/end, invoice date/from/to, payment date) showed
+  mm/dd/yyyy (browser locale) and attracted the LastPass icon over the
+  native calendar glyph. Replaced by `ui/date-picker` `DatePicker.vue`
+  (reka-ui DatePicker, `locale="it"`, week starts Monday): segmented
+  dd/mm/yyyy field ("gg/mm/aaaa" placeholders) + calendar popover.
+  v-model stays a `YYYY-MM-DD` string ('' = empty) so dialog logic is
+  unchanged; no real `<input>` exists, so password managers ignore it.
+  `@internationalized/date` added as a direct dep (was transitive).
 
 The owner now uses the app with real data (registries created by hand,
 2026 backlog imported): it has passed real usage, not just typecheck.

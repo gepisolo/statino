@@ -10,6 +10,7 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
+import { DatePicker } from '@/components/ui/date-picker';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { invoicesRepo, extractErrorMessage } from '@/lib/db';
@@ -115,7 +116,7 @@ function handleOpenChange(v: boolean) {
         <div class="grid grid-cols-2 gap-4">
           <div class="space-y-2">
             <Label for="payment-date">Data</Label>
-            <Input id="payment-date" v-model="date" type="date" :disabled="submitting" />
+            <DatePicker id="payment-date" v-model="date" :disabled="submitting" />
           </div>
           <div class="space-y-2">
             <Label for="payment-amount">Importo €</Label>

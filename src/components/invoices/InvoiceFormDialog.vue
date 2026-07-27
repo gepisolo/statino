@@ -17,6 +17,7 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { Button } from '@/components/ui/button';
+import { DatePicker } from '@/components/ui/date-picker';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { entriesRepo, invoicesRepo, extractErrorMessage } from '@/lib/db';
@@ -185,15 +186,15 @@ function handleOpenChange(v: boolean) {
         <div class="grid grid-cols-3 gap-4">
           <div class="space-y-2">
             <Label for="invoice-date">Data fattura</Label>
-            <Input id="invoice-date" v-model="date" type="date" :disabled="submitting" />
+            <DatePicker id="invoice-date" v-model="date" :disabled="submitting" />
           </div>
           <div class="space-y-2">
             <Label for="invoice-from">Dal</Label>
-            <Input id="invoice-from" v-model="dateFrom" type="date" :disabled="submitting" />
+            <DatePicker id="invoice-from" v-model="dateFrom" :disabled="submitting" />
           </div>
           <div class="space-y-2">
             <Label for="invoice-to">Al</Label>
-            <Input id="invoice-to" v-model="dateTo" type="date" :disabled="submitting" />
+            <DatePicker id="invoice-to" v-model="dateTo" :disabled="submitting" />
           </div>
         </div>
 

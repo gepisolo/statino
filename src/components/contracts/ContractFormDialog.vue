@@ -17,6 +17,7 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { Button } from '@/components/ui/button';
+import { DatePicker } from '@/components/ui/date-picker';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { contractsRepo, extractErrorMessage } from '@/lib/db';
@@ -171,11 +172,11 @@ function handleOpenChange(v: boolean) {
         <div class="grid grid-cols-2 gap-4">
           <div class="space-y-2">
             <Label for="contract-start">Inizio validità</Label>
-            <Input id="contract-start" v-model="startDate" type="date" :disabled="submitting" />
+            <DatePicker id="contract-start" v-model="startDate" :disabled="submitting" />
           </div>
           <div class="space-y-2">
             <Label for="contract-end">Fine validità</Label>
-            <Input id="contract-end" v-model="endDate" type="date" :disabled="submitting" />
+            <DatePicker id="contract-end" v-model="endDate" :disabled="submitting" />
           </div>
         </div>
         <p v-if="startDate && endDate && !datesValid" class="text-xs text-destructive">
