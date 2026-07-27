@@ -21,6 +21,7 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog';
 import EntryFormDialog from '@/components/statino/EntryFormDialog.vue';
+import TaskFormDialog from '@/components/tasks/TaskFormDialog.vue';
 import {
   clientsRepo,
   contractsRepo,
@@ -28,6 +29,7 @@ import {
   fiscalYearsRepo,
   invoicesRepo,
   projectsRepo,
+  tasksRepo,
   taxRatesRepo,
   extractErrorMessage,
 } from '@/lib/db';
@@ -53,6 +55,7 @@ import type {
   FiscalYear,
   Invoice,
   Project,
+  Task,
   TaxRate,
 } from '@/types/models';
 
@@ -85,6 +88,47 @@ const entryFormDate = ref(todayIso());
 const deleteOpen = ref(false);
 const deleteTarget = ref<Entry | null>(null);
 const deleteSubmitting = ref(false);
+
+// --- Internal tickets: "#<num>" in an entry's ticket field points to a
+// task of the Attività board; the grid renders it clickable and opens
+// the task dialog (tasks lazy-loaded at the first click). ---
+const tasks = ref<Task[] | null>(null);
+const taskDialogOpen = ref(false);
+const taskDialogTask = ref<Task | null>(null);
+const taskLoading = ref(false);
+
+function internalTicketNum(ticket: string): number | null {
+  const m = /^#(\d+)$/.exec(ticket.trim());
+  return m ? Number(m[1]) : null;
+}
+
+async function openTicket(ticket: string) {
+  const num = internalTicketNum(ticket);
+  if (num === null || taskLoading.value) return;
+  taskLoading.value = true;
+  try {
+    tasks.value ??= await tasksRepo.list(auth.uid!);
+    const t = tasks.value.find((x) => x.num === num);
+    if (!t) {
+      toast.error(`Nessun ticket #${num} in Attività`);
+      return;
+    }
+    taskDialogTask.value = t;
+    taskDialogOpen.value = true;
+  } catch (err) {
+    toast.error('Impossibile aprire il ticket', { description: extractErrorMessage(err) });
+  } finally {
+    taskLoading.value = false;
+  }
+}
+
+function onTaskSaved(t: Task) {
+  const prev = tasks.value?.find((x) => x.id === t.id);
+  if (tasks.value) tasks.value = tasks.value.map((x) => (x.id === t.id ? t : x));
+  // The task dialog's "A statino" button can create an entry of its
+  // own: refresh the grid when the save brought a new one.
+  if (t.statinoEntryId && t.statinoEntryId !== prev?.statinoEntryId) void loadEntries();
+}
 
 const yearOptions = computed(() => {
   const current = now.getFullYear();
@@ -578,11 +622,22 @@ watch(loading, async (isLoading) => {
                       {{ e.ticket || 'link' }}
                       <ExternalLink class="size-3" />
                     </a>
+                    <button
+                      v-else-if="e.ticket && internalTicketNum(e.ticket) !== null"
+                      type="button"
+                      class="text-xs font-medium text-primary underline-offset-2 hover:underline"
+                      @click="openTicket(e.ticket)"
+                    >
+                      {{ e.ticket }}
+                    </button>
                     <span v-else-if="e.ticket" class="text-xs font-medium">{{ e.ticket }}</span>
                     <span v-if="e.description" class="text-xs text-muted-foreground">
                       {{ e.description }}
                     </span>
-                    <span class="text-xs tabular-nums text-muted-foreground">
+                    <span
+                      v-if="day.entries.length > 1"
+                      class="text-xs tabular-nums text-muted-foreground"
+                    >
                       ({{ formatHours(e.hours) }} h)
                     </span>
                     <Lock
@@ -835,6 +890,15 @@ watch(loading, async (isLoading) => {
       :contracts="entryFormContracts"
       :projects="clientProjects"
       @saved="onEntrySaved"
+    />
+
+    <TaskFormDialog
+      v-model:open="taskDialogOpen"
+      mode="edit"
+      :task="taskDialogTask"
+      :clients="clients"
+      :tasks="tasks ?? []"
+      @saved="onTaskSaved"
     />
 
     <Dialog v-model:open="deleteOpen">

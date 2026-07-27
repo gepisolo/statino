@@ -4,7 +4,7 @@ Personal timesheet app ("statino") replacing an Excel sheet: hours logged
 per day, per client, against yearly contracts. Single user (Google login),
 data on Firestore. UI language: Italian.
 
-## Status (2026-07-27, v0.27.0)
+## Status (2026-07-27, v0.28.0)
 
 **Done and deployed** to https://statino-gepisolo.web.app (CI green):
 
@@ -220,6 +220,16 @@ data on Firestore. UI language: Italian.
   Saving the entry stamps `tasks.statinoEntryId` and closes both
   dialogs; the button never shows again for that task (missing = never
   sent, on older docs too).
+
+- Internal tickets clickable in the grid (v0.28.0): an entry whose
+  ticket field matches `#<num>` (and has no link — the external link
+  branch wins) renders as a primary-colored button in the statino row;
+  clicking opens the task dialog of the matching Attività ticket (tasks
+  lazy-loaded at first click, cached; unknown num → toast). Saving from
+  that dialog updates the cache, and if the save stamped a new
+  `statinoEntryId` (its "A statino" flow) the grid entries reload. Also:
+  the per-entry "(x h)" in the row now shows only on days with 2+
+  entries — on single-entry days it duplicated the day-total column.
 
 The owner now uses the app with real data (registries created by hand,
 2026 backlog imported): it has passed real usage, not just typecheck.
