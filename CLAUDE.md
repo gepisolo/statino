@@ -4,7 +4,7 @@ Personal timesheet app ("statino") replacing an Excel sheet: hours logged
 per day, per client, against yearly contracts. Single user (Google login),
 data on Firestore. UI language: Italian.
 
-## Status (2026-07-27, v0.28.0)
+## Status (2026-07-27, v0.29.0)
 
 **Done and deployed** to https://statino-gepisolo.web.app (CI green):
 
@@ -230,6 +230,11 @@ data on Firestore. UI language: Italian.
   `statinoEntryId` (its "A statino" flow) the grid entries reload. Also:
   the per-entry "(x h)" in the row now shows only on days with 2+
   entries — on single-entry days it duplicated the day-total column.
+
+- Statino badge on task cards (v0.29.0): cards of the Attività board
+  (and the Archivio list) show a muted `CalendarCheck` icon top-right
+  (next to the client name, aria-label "Riportata a statino") when
+  `statinoEntryId` is set — no need to open the dialog to check.
 
 The owner now uses the app with real data (registries created by hand,
 2026 backlog imported): it has passed real usage, not just typecheck.

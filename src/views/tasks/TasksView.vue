@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue';
 import { toast } from 'vue-sonner';
-import { Plus } from '@lucide/vue';
+import { CalendarCheck, Plus } from '@lucide/vue';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
@@ -247,8 +247,13 @@ function cardClass(t: Task): string {
                 @dragover.prevent.stop="onCardDragOver($event, t, col.key)"
                 @drop.prevent.stop="onDrop(col.key, t)"
               >
-                <div class="text-xs text-muted-foreground">
-                  {{ clientNames.get(t.clientId) ?? '—' }}
+                <div class="flex items-center justify-between gap-2 text-xs text-muted-foreground">
+                  <span class="truncate">{{ clientNames.get(t.clientId) ?? '—' }}</span>
+                  <CalendarCheck
+                    v-if="t.statinoEntryId"
+                    class="size-3.5 shrink-0"
+                    aria-label="Riportata a statino"
+                  />
                 </div>
                 <div class="text-sm font-medium">{{ t.title }}</div>
               </div>
@@ -272,8 +277,13 @@ function cardClass(t: Task): string {
             :class="cardClass(t)"
             @click="openEdit(t)"
           >
-            <div class="text-xs text-muted-foreground">
-              {{ clientNames.get(t.clientId) ?? '—' }}
+            <div class="flex items-center justify-between gap-2 text-xs text-muted-foreground">
+              <span class="truncate">{{ clientNames.get(t.clientId) ?? '—' }}</span>
+              <CalendarCheck
+                v-if="t.statinoEntryId"
+                class="size-3.5 shrink-0"
+                aria-label="Riportata a statino"
+              />
             </div>
             <div class="text-sm font-medium">{{ t.title }}</div>
           </div>
