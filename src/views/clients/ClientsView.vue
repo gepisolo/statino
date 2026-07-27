@@ -28,7 +28,7 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog';
 import ClientFormDialog from '@/components/clients/ClientFormDialog.vue';
-import { clientsRepo, extractErrorMessage } from '@/lib/db';
+import { clientsRepo, entriesRepo, extractErrorMessage } from '@/lib/db';
 import { useAuthStore } from '@/stores/auth';
 import type { Client } from '@/types/models';
 
@@ -45,6 +45,8 @@ const formClient = ref<Client | null>(null);
 const deleteOpen = ref(false);
 const deleteTarget = ref<Client | null>(null);
 const deleteSubmitting = ref(false);
+// null = still checking the statino for logged hours.
+const deleteBlocked = ref<boolean | null>(null);
 
 onMounted(async () => {
   try {
@@ -78,17 +80,26 @@ function onSaved(c: Client) {
   clients.value = [...clients.value].sort((a, b) => a.name.localeCompare(b.name));
 }
 
-function askDelete(c: Client) {
+async function askDelete(c: Client) {
   deleteTarget.value = c;
+  deleteBlocked.value = null;
   deleteOpen.value = true;
+  try {
+    deleteBlocked.value = await entriesRepo.existsForClient(auth.uid!, c.id);
+  } catch (err) {
+    toast.error('Impossibile verificare le ore del cliente', {
+      description: extractErrorMessage(err),
+    });
+    deleteOpen.value = false;
+  }
 }
 
 async function confirmDelete() {
-  if (!deleteTarget.value) return;
+  if (!deleteTarget.value || deleteBlocked.value !== false) return;
   deleteSubmitting.value = true;
   const c = deleteTarget.value;
   try {
-    await clientsRepo.remove(auth.uid!, c.id);
+    await clientsRepo.removeCascade(auth.uid!, c.id);
     clients.value = clients.value.filter((x) => x.id !== c.id);
     toast.success('Cliente eliminato', { description: c.name });
     deleteOpen.value = false;
@@ -178,9 +189,15 @@ async function confirmDelete() {
         <DialogHeader>
           <DialogTitle>Eliminare il cliente?</DialogTitle>
           <DialogDescription>
-            <span class="font-medium">{{ deleteTarget?.name }}</span> verrà rimosso dall'anagrafica.
-            Contratti, progetti e ore già registrate che vi fanno riferimento non vengono cancellati
-            ma resteranno orfani.
+            <template v-if="deleteBlocked === null">Controllo delle ore registrate…</template>
+            <template v-else-if="deleteBlocked">
+              <span class="font-medium">{{ deleteTarget?.name }}</span> ha ore registrate nello
+              statino e non può essere eliminato.
+            </template>
+            <template v-else>
+              <span class="font-medium">{{ deleteTarget?.name }}</span> non ha ore registrate nello
+              statino: verrà rimosso dall'anagrafica insieme ai suoi contratti e progetti.
+            </template>
           </DialogDescription>
         </DialogHeader>
         <DialogFooter>
@@ -195,7 +212,7 @@ async function confirmDelete() {
           <Button
             variant="destructive"
             size="sm"
-            :disabled="deleteSubmitting"
+            :disabled="deleteSubmitting || deleteBlocked !== false"
             @click="confirmDelete"
           >
             {{ deleteSubmitting ? 'Eliminazione…' : 'Elimina' }}

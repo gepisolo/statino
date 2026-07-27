@@ -4,6 +4,7 @@ import {
   deleteDoc,
   doc,
   getDocs,
+  limit,
   query,
   setDoc,
   updateDoc,
@@ -49,7 +50,24 @@ function makeRepo<T extends { id: string }>(name: string, sort: (a: T, b: T) => 
   };
 }
 
-export const clientsRepo = makeRepo<Client>('clients', (a, b) => a.name.localeCompare(b.name));
+export const clientsRepo = {
+  ...makeRepo<Client>('clients', (a, b) => a.name.localeCompare(b.name)),
+  // Deleting a client (only allowed when it has no statino hours) also
+  // drops its contracts and projects: without the client they would be
+  // unreachable orphans.
+  async removeCascade(uid: string, id: string): Promise<void> {
+    const [contracts, projects] = await Promise.all([
+      getDocs(query(collection(db, 'users', uid, 'contracts'), where('clientId', '==', id))),
+      getDocs(query(collection(db, 'users', uid, 'projects'), where('clientId', '==', id))),
+    ]);
+    const batch = writeBatch(db);
+    for (const d of [...contracts.docs, ...projects.docs]) {
+      batch.delete(d.ref);
+    }
+    batch.delete(doc(db, 'users', uid, 'clients', id));
+    await batch.commit();
+  },
+};
 
 export const projectsRepo = makeRepo<Project>('projects', (a, b) => a.name.localeCompare(b.name));
 
@@ -77,6 +95,14 @@ export const entriesRepo = {
   },
   async listYear(uid: string, year: number): Promise<Entry[]> {
     return this.listRange(uid, `${year}-01-01`, `${year}-12-31`);
+  },
+  // Guard for client deletion: any hour logged for the client, in any
+  // year, blocks it.
+  async existsForClient(uid: string, clientId: string): Promise<boolean> {
+    const snap = await getDocs(
+      query(collection(db, 'users', uid, 'entries'), where('clientId', '==', clientId), limit(1)),
+    );
+    return !snap.empty;
   },
 };
 

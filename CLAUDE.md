@@ -4,7 +4,7 @@ Personal timesheet app ("statino") replacing an Excel sheet: hours logged
 per day, per client, against yearly contracts. Single user (Google login),
 data on Firestore. UI language: Italian.
 
-## Status (2026-07-27, v0.20.0)
+## Status (2026-07-27, v0.21.0)
 
 **Done and deployed** to https://statino-gepisolo.web.app (CI green):
 
@@ -148,6 +148,13 @@ data on Firestore. UI language: Italian.
   summary box shows Importo − Sconto = Totale when set; the invoices
   list (table + mobile card) shows a muted "sconto −X €" line under the
   amount (reason as tooltip on desktop, inline on mobile).
+
+- Guarded client deletion (v0.21.0): deleting a client is now blocked
+  if it has statino hours (`entriesRepo.existsForClient`, checked when
+  the confirm dialog opens; the Elimina button stays disabled and the
+  text explains why). When allowed, `clientsRepo.removeCascade` deletes
+  the client WITH its contracts and projects in one batch (no more
+  orphans — the old dialog warned about them instead).
 
 The owner now uses the app with real data (registries created by hand,
 2026 backlog imported): it has passed real usage, not just typecheck.
