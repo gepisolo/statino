@@ -6,6 +6,13 @@ import { DatePickerRoot, DatePickerTrigger } from 'reka-ui';
 import { Banknote, MoreHorizontal, Pencil, Plus, Trash2 } from '@lucide/vue';
 import { Button } from '@/components/ui/button';
 import { DatePickerPanel } from '@/components/ui/date-picker';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
 import { Skeleton } from '@/components/ui/skeleton';
 import {
   Table,
@@ -33,6 +40,7 @@ import InvoiceFormDialog from '@/components/invoices/InvoiceFormDialog.vue';
 import InvoicePaymentFormDialog from '@/components/invoices/InvoicePaymentFormDialog.vue';
 import { clientsRepo, contractsRepo, invoicesRepo, extractErrorMessage } from '@/lib/db';
 import { formatDate, formatEur, formatHours } from '@/lib/format';
+import { invoiceRefDate } from '@/lib/stats';
 import { useAuthStore } from '@/stores/auth';
 import type { Client, Contract, Invoice } from '@/types/models';
 
@@ -54,6 +62,17 @@ const deleteSubmitting = ref(false);
 
 const clientNames = computed(() => new Map(clients.value.map((c) => [c.id, c.name])));
 
+// Filter on the issue date's year (docs without one fall back to the
+// period end, same reference the stats use).
+const year = ref(new Date().getFullYear());
+const yearOf = (i: Invoice) => Number(invoiceRefDate(i).slice(0, 4));
+const yearOptions = computed(() => {
+  const years = new Set(invoices.value.map(yearOf));
+  years.add(new Date().getFullYear());
+  return [...years].sort((a, b) => b - a);
+});
+const filteredInvoices = computed(() => invoices.value.filter((i) => yearOf(i) === year.value));
+
 onMounted(async () => {
   try {
     [clients.value, contracts.value, invoices.value] = await Promise.all([
@@ -72,6 +91,8 @@ function onSaved(i: Invoice) {
   invoices.value = [...invoices.value, i].sort((a, b) =>
     (b.date ?? b.dateFrom).localeCompare(a.date ?? a.dateFrom),
   );
+  // Keep the new invoice visible even if it lands in another year.
+  year.value = yearOf(i);
 }
 
 // Backfill for invoices created before the issue-date field existed.
@@ -131,10 +152,20 @@ async function confirmDelete() {
           non sono più modificabili (solo la descrizione) né eliminabili.
         </p>
       </div>
-      <Button size="sm" :disabled="!clients.length" @click="formOpen = true">
-        <Plus class="size-3.5" />
-        Nuova fattura
-      </Button>
+      <div class="flex items-center gap-2">
+        <Select v-model="year">
+          <SelectTrigger class="w-24" aria-label="Anno">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem v-for="y in yearOptions" :key="y" :value="y">{{ y }}</SelectItem>
+          </SelectContent>
+        </Select>
+        <Button size="sm" :disabled="!clients.length" @click="formOpen = true">
+          <Plus class="size-3.5" />
+          Nuova fattura
+        </Button>
+      </div>
     </div>
 
     <div v-if="loading" class="space-y-2">
@@ -144,13 +175,13 @@ async function confirmDelete() {
     </div>
     <div v-else class="space-y-3 md:hidden">
       <div
-        v-if="!invoices.length"
+        v-if="!filteredInvoices.length"
         class="rounded-lg border border-dashed p-8 text-center text-sm text-muted-foreground"
       >
-        Nessuna fattura.
+        {{ invoices.length ? `Nessuna fattura nel ${year}.` : 'Nessuna fattura.' }}
       </div>
       <div
-        v-for="i in invoices"
+        v-for="i in filteredInvoices"
         :key="i.id"
         class="rounded-lg border bg-card p-4 text-card-foreground"
       >
@@ -252,12 +283,12 @@ async function confirmDelete() {
         </TableRow>
       </TableHeader>
       <TableBody>
-        <TableRow v-if="!invoices.length">
+        <TableRow v-if="!filteredInvoices.length">
           <TableCell colspan="8" class="text-center text-muted-foreground">
-            Nessuna fattura.
+            {{ invoices.length ? `Nessuna fattura nel ${year}.` : 'Nessuna fattura.' }}
           </TableCell>
         </TableRow>
-        <TableRow v-for="i in invoices" :key="i.id">
+        <TableRow v-for="i in filteredInvoices" :key="i.id">
           <TableCell class="font-medium">{{ i.number }}</TableCell>
           <TableCell class="tabular-nums">
             <template v-if="i.date">{{ formatDate(i.date) }}</template>

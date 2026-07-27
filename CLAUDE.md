@@ -4,7 +4,7 @@ Personal timesheet app ("statino") replacing an Excel sheet: hours logged
 per day, per client, against yearly contracts. Single user (Google login),
 data on Firestore. UI language: Italian.
 
-## Status (2026-07-27, v0.21.0)
+## Status (2026-07-27, v0.22.0)
 
 **Done and deployed** to https://statino-gepisolo.web.app (CI green):
 
@@ -155,6 +155,13 @@ data on Firestore. UI language: Italian.
   text explains why). When allowed, `clientsRepo.removeCascade` deletes
   the client WITH its contracts and projects in one batch (no more
   orphans — the old dialog warned about them instead).
+
+- Invoices year filter (v0.22.0): the invoices list has a year Select
+  in the header (options = years present in the data ∪ current year,
+  default current) filtering both the table and the mobile cards by
+  `invoiceRefDate` (issue date, `dateTo` fallback — same reference as
+  the stats). Saving an invoice switches the filter to its year so it
+  never lands out of sight.
 
 The owner now uses the app with real data (registries created by hand,
 2026 backlog imported): it has passed real usage, not just typecheck.
