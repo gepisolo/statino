@@ -258,6 +258,19 @@ const netOf = (gross: number) => computeNet(gross, year.value, fiscalYears.value
 // with progressive brackets it's the month taken in isolation.
 const monthNet = computed(() => netOf(totalMonthAmount.value));
 
+// Month totals across every client, not just the selected one.
+const allMonthEntries = computed(() =>
+  entries.value.filter((e) => e.date.startsWith(monthPrefix.value)),
+);
+const allMonthHours = computed(() => allMonthEntries.value.reduce((sum, e) => sum + e.hours, 0));
+const allMonthAmount = computed(() =>
+  allMonthEntries.value.reduce(
+    (sum, e) => sum + e.hours * (contractById.value.get(e.contractId)?.hourlyRate ?? 0),
+    0,
+  ),
+);
+const allMonthNet = computed(() => netOf(allMonthAmount.value));
+
 const clientInvoices = computed(() => invoices.value.filter((i) => i.clientId === clientId.value));
 const clientInvoiced = computed(() => invoicedAmount(clientInvoices.value));
 const clientCollected = computed(() => collectedAmount(clientInvoices.value));
@@ -572,7 +585,7 @@ watch(loading, async (isLoading) => {
       <aside class="w-full shrink-0 space-y-4 xl:w-80">
         <Card>
           <CardHeader>
-            <CardTitle class="text-base"> Totali {{ monthName(month) }} {{ year }} </CardTitle>
+            <CardTitle class="text-base">Totale {{ clientName }}</CardTitle>
           </CardHeader>
           <CardContent class="space-y-1">
             <div class="flex items-baseline justify-between">
@@ -593,10 +606,31 @@ watch(loading, async (isLoading) => {
                 {{ monthNet ? formatEur(monthNet.net) : '—' }}
               </span>
             </div>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle class="text-base"> Totali {{ monthName(month) }} {{ year }} </CardTitle>
+          </CardHeader>
+          <CardContent class="space-y-1">
+            <p class="pb-1 text-xs text-muted-foreground">Tutti i clienti nel mese.</p>
             <div class="flex items-baseline justify-between">
-              <span class="text-sm text-muted-foreground">Da accantonare</span>
+              <span class="text-sm text-muted-foreground">Ore</span>
+              <span class="text-xl font-semibold tabular-nums">
+                {{ formatHours(allMonthHours) }}
+              </span>
+            </div>
+            <div class="flex items-baseline justify-between">
+              <span class="text-sm text-muted-foreground">Importo</span>
+              <span class="text-xl font-semibold tabular-nums">
+                {{ formatEur(allMonthAmount) }}
+              </span>
+            </div>
+            <div class="flex items-baseline justify-between">
+              <span class="text-sm text-muted-foreground">Netto previsto</span>
               <span class="text-base font-medium tabular-nums">
-                {{ monthNet ? formatEur(monthNet.due) : '—' }}
+                {{ allMonthNet ? formatEur(allMonthNet.net) : '—' }}
               </span>
             </div>
             <p v-if="!hasFiscalConfig" class="pt-1 text-xs text-muted-foreground">

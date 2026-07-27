@@ -4,7 +4,7 @@ Personal timesheet app ("statino") replacing an Excel sheet: hours logged
 per day, per client, against yearly contracts. Single user (Google login),
 data on Firestore. UI language: Italian.
 
-## Status (2026-07-27, v0.22.0)
+## Status (2026-07-27, v0.23.0)
 
 **Done and deployed** to https://statino-gepisolo.web.app (CI green):
 
@@ -162,6 +162,13 @@ data on Firestore. UI language: Italian.
   `invoiceRefDate` (issue date, `dateTo` fallback — same reference as
   the stats). Saving an invoice switches the filter to its year so it
   never lands out of sight.
+
+- Statino month cards split (v0.23.0): the first side-panel card is now
+  "Totale <cliente>" (selected client's month: Ore, Importo, Netto
+  previsto — the "Da accantonare" row was dropped); right below it a new
+  "Totali <mese> <anno>" card shows the same three figures summed over
+  ALL clients' entries of the month (`allMonth*` computeds). The
+  fiscal-config hint moved to the all-clients card.
 
 The owner now uses the app with real data (registries created by hand,
 2026 backlog imported): it has passed real usage, not just typecheck.
