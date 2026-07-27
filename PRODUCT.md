@@ -55,7 +55,11 @@ year. No neighboring product models this situation exactly.
   project registries, invoices with entry locking, optional discount
   and payment recording, fiscal settings per year, net-income calc,
   statistics section (per month/client/year), tasks kanban ("Attività":
-  TODO/WIP/Done + archive). See CLAUDE.md Status for detail.
+  TODO/WIP/Done + archive, creation/done dates). Kanban and statino are
+  bridged both ways: a done ticket flows into the statino via a one-shot
+  "A statino" button (badge on the card once sent), and `#num` tickets
+  in the grid open the corresponding task dialog. See CLAUDE.md Status
+  for detail.
 - UI language: **Italian**, always.
 - Full-Firebase (Firestore + Auth), no backend; Google login means the
   deployed app cannot be driven headlessly for verification.
