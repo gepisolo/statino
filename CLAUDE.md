@@ -4,7 +4,7 @@ Personal timesheet app ("statino") replacing an Excel sheet: hours logged
 per day, per client, against yearly contracts. Single user (Google login),
 data on Firestore. UI language: Italian.
 
-## Status (2026-07-27, v0.23.0)
+## Status (2026-07-27, v0.24.0)
 
 **Done and deployed** to https://statino-gepisolo.web.app (CI green):
 
@@ -169,6 +169,18 @@ data on Firestore. UI language: Italian.
   "Totali <mese> <anno>" card shows the same three figures summed over
   ALL clients' entries of the month (`allMonth*` computeds). The
   fiscal-config hint moved to the all-clients card.
+
+- Statino PDF export (v0.24.0): "Esporta PDF" button next to the
+  statino selectors (visible when a client is selected) downloads the
+  month grid as an A4 PDF to attach to the client's email:
+  `lib/pdf.ts` `exportStatinoPdf()` with jspdf + jspdf-autotable
+  (dynamically imported — own chunks, main bundle untouched). One row
+  per activity ("attività · progetto · ticket — descrizione", the day
+  cell rowSpans), weekends shaded, TOTALE foot row, entry links
+  clickable (whole Attività cell), filename
+  `statino-<cliente>-<YYYY-MM>.pdf`. Deliberately hours-only — no
+  rates or amounts, it's a client-facing report of the grid, not the
+  side cards.
 
 The owner now uses the app with real data (registries created by hand,
 2026 backlog imported): it has passed real usage, not just typecheck.

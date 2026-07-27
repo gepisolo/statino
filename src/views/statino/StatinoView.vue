@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, nextTick, onMounted, ref, watch } from 'vue';
 import { toast } from 'vue-sonner';
-import { ExternalLink, Lock, Pencil, Plus, Trash2 } from '@lucide/vue';
+import { ExternalLink, FileDown, Lock, Pencil, Plus, Trash2 } from '@lucide/vue';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -31,6 +31,7 @@ import {
   taxRatesRepo,
   extractErrorMessage,
 } from '@/lib/db';
+import { exportStatinoPdf } from '@/lib/pdf';
 import { computeNet } from '@/lib/tax';
 import {
   daysInMonth,
@@ -388,6 +389,50 @@ async function confirmDeleteEntry() {
 
 const loading = computed(() => loadingCatalogs.value || loadingEntries.value);
 
+// PDF of the month grid (only what the client may see: no rates, no
+// amounts) to attach to the invoice email.
+const exporting = ref(false);
+
+function entryPdfText(e: Entry): string {
+  const parts = [contractById.value.get(e.contractId)?.activity ?? '—'];
+  const project = e.projectId ? projectById.value.get(e.projectId)?.name : null;
+  if (project) parts.push(project);
+  const ticket = e.ticket || (e.link ? 'link' : '');
+  if (ticket) parts.push(ticket);
+  const head = parts.join(' · ');
+  return e.description ? `${head} — ${e.description}` : head;
+}
+
+async function exportPdf() {
+  if (!clientId.value) return;
+  exporting.value = true;
+  try {
+    const slug = clientName.value
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, '-')
+      .replace(/^-|-$/g, '');
+    await exportStatinoPdf({
+      clientName: clientName.value,
+      periodLabel: `${monthName(month.value)} ${year.value}`,
+      totalHours: formatHours(totalMonthHours.value),
+      fileName: `statino-${slug}-${monthPrefix.value}.pdf`,
+      days: days.value.map((d) => ({
+        label: `${d.dayLabel} ${d.weekdayShort}`,
+        weekend: d.weekend,
+        entries: d.entries.map((e) => ({
+          text: entryPdfText(e),
+          link: e.link || null,
+          hours: formatHours(e.hours),
+        })),
+      })),
+    });
+  } catch (err) {
+    toast.error('Impossibile esportare il PDF', { description: extractErrorMessage(err) });
+  } finally {
+    exporting.value = false;
+  }
+}
+
 // The mobile FAB adds hours to today, so it only makes sense while the
 // grid is showing the current month.
 const viewingCurrentMonth = computed(
@@ -438,6 +483,16 @@ watch(loading, async (isLoading) => {
             <SelectItem v-for="c in clients" :key="c.id" :value="c.id">{{ c.name }}</SelectItem>
           </SelectContent>
         </Select>
+        <Button
+          v-if="clientId"
+          variant="outline"
+          class="col-span-2 sm:col-span-1"
+          :disabled="loading || exporting"
+          @click="exportPdf"
+        >
+          <FileDown class="size-3.5" />
+          {{ exporting ? 'Esportazione…' : 'Esporta PDF' }}
+        </Button>
       </div>
     </div>
 
