@@ -90,7 +90,10 @@ export interface InvoicePayment {
 // manual position inside a column (lower = higher up), assigned so a
 // task entering a column lands on top. Archiving keeps the done
 // outcome (`archived` flag instead of a status) so OK/KO survives.
-// `hours` (optional) only makes sense once done.
+// `hours` (optional) only makes sense once done. `createdAt` is the
+// creation day, `doneAt` the day the task entered Done OK/KO (cleared
+// if it moves back); both missing on docs predating them, `doneAt`
+// stays unknown for tasks already done before the field existed.
 export type TaskStatus = 'todo' | 'wip' | 'done_ok' | 'done_ko';
 export interface Task {
   id: string;
@@ -102,6 +105,8 @@ export interface Task {
   archived: boolean;
   hours: number | null;
   order: number;
+  createdAt?: string | null; // YYYY-MM-DD
+  doneAt?: string | null; // YYYY-MM-DD
 }
 
 // A discount applied at invoice creation: `amount` (€) is subtracted

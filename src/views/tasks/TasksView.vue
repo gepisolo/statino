@@ -7,6 +7,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import TaskFormDialog from '@/components/tasks/TaskFormDialog.vue';
 import { clientsRepo, tasksRepo, extractErrorMessage } from '@/lib/db';
+import { todayIso } from '@/lib/format';
 import { useAuthStore } from '@/stores/auth';
 import type { Client, Task, TaskStatus } from '@/types/models';
 
@@ -133,19 +134,22 @@ async function onDrop(col: Column, target?: Task) {
   // outcome (it's just a reorder).
   const sameColumn = columnOf(task) === col;
   const newStatus: TaskStatus = col === 'done' ? (sameColumn ? task.status : 'done_ok') : col;
+  // Entering Done stamps today, leaving it clears the stamp.
+  const doneAt = col === 'done' ? (sameColumn ? (task.doneAt ?? null) : todayIso()) : null;
 
   const ordered = [...list.slice(0, idx), task, ...list.slice(idx)];
   const updates = ordered.map((t, i) => ({
     id: t.id,
     order: i,
-    ...(t.id === id && newStatus !== task.status ? { status: newStatus } : {}),
+    ...(t.id === id && newStatus !== task.status ? { status: newStatus, doneAt } : {}),
   }));
 
   const orderById = new Map(updates.map((u) => [u.id, u.order]));
   tasks.value = tasks.value.map((t) => {
     const order = orderById.get(t.id);
     if (order === undefined) return t;
-    return { ...t, order, status: t.id === id ? newStatus : t.status };
+    if (t.id !== id) return { ...t, order };
+    return newStatus !== task.status ? { ...t, order, status: newStatus, doneAt } : { ...t, order };
   });
   try {
     await tasksRepo.reorder(auth.uid!, updates);

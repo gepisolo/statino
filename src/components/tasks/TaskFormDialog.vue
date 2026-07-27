@@ -21,7 +21,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { tasksRepo, extractErrorMessage } from '@/lib/db';
-import { parseDecimal } from '@/lib/format';
+import { parseDecimal, todayIso } from '@/lib/format';
 import { useAuthStore } from '@/stores/auth';
 import type { Client, Task, TaskStatus } from '@/types/models';
 
@@ -99,10 +99,14 @@ watch(
   },
 );
 
+function isDone(s: TaskStatus): boolean {
+  return s === 'done_ok' || s === 'done_ko';
+}
+
 // Board columns: done_ok and done_ko share one, archived has its own.
 function columnOf(s: TaskStatus, archived: boolean): string {
   if (archived) return 'archived';
-  return s === 'done_ok' || s === 'done_ko' ? 'done' : s;
+  return isDone(s) ? 'done' : s;
 }
 
 // A task entering a column goes on top of it.
@@ -131,6 +135,8 @@ async function submit() {
         status: 'todo',
         archived: false,
         order: topOrderIn('todo'),
+        createdAt: todayIso(),
+        doneAt: null,
       });
     } else {
       const t = props.task!;
@@ -145,12 +151,17 @@ async function submit() {
           : status.value;
       const oldColumn = columnOf(t.status, t.archived);
       const newColumn = columnOf(newStatus, archived);
+      // Entering Done stamps today; leaving it clears the stamp; staying
+      // done keeps the original date (null on docs done before the field).
+      const doneAt = !isDone(newStatus) ? null : isDone(t.status) ? (t.doneAt ?? null) : todayIso();
       saved = await tasksRepo.update(auth.uid!, t.id, {
         ...base,
         num: t.num,
         status: newStatus,
         archived,
         order: newColumn === oldColumn ? t.order : topOrderIn(newColumn, t.id),
+        createdAt: t.createdAt ?? null,
+        doneAt,
       });
     }
     toast.success(props.mode === 'create' ? 'Attività creata' : 'Attività aggiornata', {

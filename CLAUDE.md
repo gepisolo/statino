@@ -4,7 +4,7 @@ Personal timesheet app ("statino") replacing an Excel sheet: hours logged
 per day, per client, against yearly contracts. Single user (Google login),
 data on Firestore. UI language: Italian.
 
-## Status (2026-07-27, v0.25.0)
+## Status (2026-07-27, v0.26.0)
 
 **Done and deployed** to https://statino-gepisolo.web.app (CI green):
 
@@ -200,6 +200,14 @@ data on Firestore. UI language: Italian.
   optimistic local update). DnD is desktop-only; on touch the dialog's
   status select covers the same moves. No rules change needed
   (`users/{uid}/{document=**}`).
+
+- Task dates (v0.26.0): tasks now record `createdAt` (stamped at
+  creation) and `doneAt` (stamped when the status enters Done OK/KO —
+  via dialog select or drag & drop — cleared if the card moves back to
+  TODO/WIP; staying within Done keeps the original date). Both
+  YYYY-MM-DD strings, missing on docs predating the fields (`doneAt`
+  stays null for tasks already done before it existed). Saved only, not
+  shown in the UI yet.
 
 The owner now uses the app with real data (registries created by hand,
 2026 backlog imported): it has passed real usage, not just typecheck.

@@ -158,14 +158,15 @@ export const tasksRepo = {
   ...makeRepo<Task>('tasks', (a, b) => a.order - b.order),
   async reorder(
     uid: string,
-    updates: { id: string; order: number; status?: TaskStatus }[],
+    updates: { id: string; order: number; status?: TaskStatus; doneAt?: string | null }[],
   ): Promise<void> {
     const batch = writeBatch(db);
     for (const u of updates) {
-      batch.update(
-        doc(db, 'users', uid, 'tasks', u.id),
-        u.status ? { order: u.order, status: u.status } : { order: u.order },
-      );
+      batch.update(doc(db, 'users', uid, 'tasks', u.id), {
+        order: u.order,
+        ...(u.status !== undefined ? { status: u.status } : {}),
+        ...(u.doneAt !== undefined ? { doneAt: u.doneAt } : {}),
+      });
     }
     await batch.commit();
   },
