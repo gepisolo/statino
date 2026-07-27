@@ -21,7 +21,7 @@ import { DatePicker } from '@/components/ui/date-picker';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { entriesRepo, invoicesRepo, extractErrorMessage } from '@/lib/db';
-import { formatEur, formatHours, todayIso } from '@/lib/format';
+import { formatEur, formatHours, parseDecimal, todayIso } from '@/lib/format';
 import { useAuthStore } from '@/stores/auth';
 import type { Client, Contract, Entry, Invoice } from '@/types/models';
 
@@ -43,6 +43,8 @@ const number = ref('');
 const date = ref('');
 const dateFrom = ref('');
 const dateTo = ref('');
+const discount = ref<string | number>('');
+const discountReason = ref('');
 const submitting = ref(false);
 
 // Entries loaded for the selected period (any client), then narrowed to
@@ -70,13 +72,29 @@ const totalAmount = computed(() =>
   ),
 );
 
+const discountNum = computed(() => parseDecimal(discount.value));
+const hasDiscount = computed(
+  () => discount.value !== '' && Number.isFinite(discountNum.value) && discountNum.value > 0,
+);
+// Empty = no discount; when set it needs a reason and can't exceed the
+// billed amount (the invoice total never goes negative).
+const discountValid = computed(
+  () =>
+    discount.value === '' ||
+    (hasDiscount.value &&
+      discountNum.value <= totalAmount.value &&
+      discountReason.value.trim().length > 0),
+);
+const finalAmount = computed(() => totalAmount.value - (hasDiscount.value ? discountNum.value : 0));
+
 const valid = computed(
   () =>
     clientId.value !== '' &&
     number.value.trim().length > 0 &&
     /^\d{4}-\d{2}-\d{2}$/.test(date.value) &&
     rangeValid.value &&
-    billable.value.length > 0,
+    billable.value.length > 0 &&
+    discountValid.value,
 );
 
 watch(
@@ -88,6 +106,8 @@ watch(
     date.value = todayIso();
     dateFrom.value = '';
     dateTo.value = '';
+    discount.value = '';
+    discountReason.value = '';
     rangeEntries.value = [];
   },
 );
@@ -122,7 +142,10 @@ async function submit() {
         dateFrom: dateFrom.value,
         dateTo: dateTo.value,
         hours: totalHours.value,
-        amount: totalAmount.value,
+        amount: finalAmount.value,
+        discount: hasDiscount.value
+          ? { amount: discountNum.value, reason: discountReason.value.trim() }
+          : null,
       },
       billable.value.map((e) => e.id),
     );
@@ -198,6 +221,34 @@ function handleOpenChange(v: boolean) {
           </div>
         </div>
 
+        <div class="grid grid-cols-3 gap-4">
+          <div class="space-y-2">
+            <Label for="invoice-discount">Sconto €</Label>
+            <Input
+              id="invoice-discount"
+              v-model="discount"
+              type="number"
+              min="0.01"
+              step="0.01"
+              :disabled="submitting"
+            />
+          </div>
+          <div class="col-span-2 space-y-2">
+            <Label for="invoice-discount-reason">Motivazione sconto</Label>
+            <Input
+              id="invoice-discount-reason"
+              v-model="discountReason"
+              type="text"
+              placeholder="Ore non conteggiate, accordo…"
+              :disabled="submitting"
+              autocomplete="off"
+            />
+          </div>
+        </div>
+        <p v-if="discount !== '' && !discountValid" class="text-xs text-destructive">
+          Lo sconto richiede una motivazione e non può superare l'importo delle attività.
+        </p>
+
         <div class="rounded-md border bg-muted/40 px-4 py-3">
           <template v-if="!clientId || !rangeValid">
             <p class="text-sm text-muted-foreground">
@@ -214,7 +265,21 @@ function handleOpenChange(v: boolean) {
               </span>
               <span class="text-sm tabular-nums">{{ formatHours(totalHours) }} h</span>
             </div>
-            <div class="mt-1 flex items-baseline justify-between">
+            <template v-if="hasDiscount">
+              <div class="mt-1 flex items-baseline justify-between">
+                <span class="text-sm text-muted-foreground">Importo</span>
+                <span class="text-sm tabular-nums">{{ formatEur(totalAmount) }}</span>
+              </div>
+              <div class="mt-1 flex items-baseline justify-between">
+                <span class="text-sm text-muted-foreground">Sconto</span>
+                <span class="text-sm tabular-nums">−{{ formatEur(discountNum) }}</span>
+              </div>
+              <div class="mt-1 flex items-baseline justify-between">
+                <span class="text-sm text-muted-foreground">Totale</span>
+                <span class="text-xl font-semibold tabular-nums">{{ formatEur(finalAmount) }}</span>
+              </div>
+            </template>
+            <div v-else class="mt-1 flex items-baseline justify-between">
               <span class="text-sm text-muted-foreground">Importo</span>
               <span class="text-xl font-semibold tabular-nums">{{ formatEur(totalAmount) }}</span>
             </div>

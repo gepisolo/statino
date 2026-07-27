@@ -216,7 +216,12 @@ async function confirmDelete() {
           </div>
           <div class="flex justify-between gap-4">
             <dt class="text-muted-foreground">Importo</dt>
-            <dd class="font-medium tabular-nums">{{ formatEur(i.amount) }}</dd>
+            <dd class="text-right font-medium tabular-nums">
+              {{ formatEur(i.amount) }}
+              <div v-if="i.discount" class="text-xs font-normal text-muted-foreground">
+                sconto −{{ formatEur(i.discount.amount) }} · {{ i.discount.reason }}
+              </div>
+            </dd>
           </div>
           <div class="flex justify-between gap-4">
             <dt class="text-muted-foreground">Incassato</dt>
@@ -279,7 +284,12 @@ async function confirmDelete() {
             {{ formatDate(i.dateFrom) }} – {{ formatDate(i.dateTo) }}
           </TableCell>
           <TableCell class="text-right tabular-nums">{{ formatHours(i.hours) }}</TableCell>
-          <TableCell class="text-right tabular-nums">{{ formatEur(i.amount) }}</TableCell>
+          <TableCell class="text-right tabular-nums">
+            <div>{{ formatEur(i.amount) }}</div>
+            <div v-if="i.discount" class="text-xs text-muted-foreground" :title="i.discount.reason">
+              sconto −{{ formatEur(i.discount.amount) }}
+            </div>
+          </TableCell>
           <TableCell class="text-right tabular-nums">
             <template v-if="i.payment">
               <div :title="i.payment.description || undefined">

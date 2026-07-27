@@ -85,12 +85,21 @@ export interface InvoicePayment {
   description: string;
 }
 
+// A discount applied at invoice creation: `amount` (€) is subtracted
+// from the billed hours×rate, `reason` says why.
+export interface InvoiceDiscount {
+  amount: number;
+  reason: string;
+}
+
 // An issued invoice: the entries of `clientId` dated within
 // [dateFrom, dateTo] that were not yet invoiced get locked with this
 // invoice's id. `hours`/`amount` are frozen at creation time.
 // `payment` missing or null = not collected yet. `date` is the issue
 // date, the reference for "invoiced in the year/month" stats; docs
 // created before it existed don't have it (fall back to dateTo).
+// `amount` is already net of `discount` (gross = amount +
+// discount.amount); discount missing or null = none.
 export interface Invoice {
   id: string;
   clientId: string;
@@ -100,5 +109,6 @@ export interface Invoice {
   dateTo: string; // YYYY-MM-DD inclusive
   hours: number;
   amount: number;
+  discount?: InvoiceDiscount | null;
   payment?: InvoicePayment | null;
 }

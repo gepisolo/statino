@@ -4,7 +4,7 @@ Personal timesheet app ("statino") replacing an Excel sheet: hours logged
 per day, per client, against yearly contracts. Single user (Google login),
 data on Firestore. UI language: Italian.
 
-## Status (2026-07-27, v0.19.0)
+## Status (2026-07-27, v0.20.0)
 
 **Done and deployed** to https://statino-gepisolo.web.app (CI green):
 
@@ -138,6 +138,16 @@ data on Firestore. UI language: Italian.
   re-sorts the list. The calendar opens on the invoice's `dateTo`
   month (`default-placeholder`), since the issue date is usually near
   the period end.
+
+- Invoice discount (v0.20.0): the create-invoice dialog gained optional
+  "Sconto €" + "Motivazione sconto" fields. `invoices.discount
+  { amount, reason }` (missing/null = none); the frozen `amount` is
+  saved already NET of the discount (gross = amount + discount.amount),
+  so payments prefill and every stat keep working unchanged. Validation:
+  discount needs a reason and can't exceed the billed amount. The
+  summary box shows Importo − Sconto = Totale when set; the invoices
+  list (table + mobile card) shows a muted "sconto −X €" line under the
+  amount (reason as tooltip on desktop, inline on mobile).
 
 The owner now uses the app with real data (registries created by hand,
 2026 backlog imported): it has passed real usage, not just typecheck.
