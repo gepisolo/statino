@@ -20,10 +20,11 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
-import { tasksRepo, extractErrorMessage } from '@/lib/db';
+import EntryFormDialog from '@/components/statino/EntryFormDialog.vue';
+import { contractsRepo, projectsRepo, tasksRepo, extractErrorMessage } from '@/lib/db';
 import { parseDecimal, todayIso } from '@/lib/format';
 import { useAuthStore } from '@/stores/auth';
-import type { Client, Task, TaskStatus } from '@/types/models';
+import type { Client, Contract, Entry, Project, Task, TaskStatus } from '@/types/models';
 
 const props = defineProps<{
   open: boolean;
@@ -117,6 +118,80 @@ function topOrderIn(column: string, excludeId?: string): number {
   return orders.length ? Math.min(...orders) - 1 : 0;
 }
 
+// --- "A statino": one-shot button on done tasks that opens the statino
+// entry dialog prefilled from the ticket (only the contract is left to
+// pick). Saving the entry stamps `statinoEntryId` and closes both
+// dialogs; the button is gone for good afterwards. ---
+
+const statinoOpen = ref(false);
+const statinoLoading = ref(false);
+const statinoContracts = ref<Contract[]>([]);
+const statinoProjects = ref<Project[]>([]);
+
+const canSendToStatino = computed(() => {
+  const t = props.task;
+  return props.mode === 'edit' && t !== null && isDone(t.status) && !t.statinoEntryId;
+});
+
+// Tasks done before `doneAt` existed have no close date: fall back to today.
+const statinoDate = computed(() => props.task?.doneAt ?? todayIso());
+
+const statinoPrefill = computed(() => {
+  const t = props.task;
+  if (!t) return null;
+  return { ticket: `#${t.num}`, description: t.title, hours: t.hours };
+});
+
+async function openStatino() {
+  const t = props.task!;
+  statinoLoading.value = true;
+  try {
+    const [contracts, projects] = await Promise.all([
+      contractsRepo.list(auth.uid!),
+      projectsRepo.list(auth.uid!),
+    ]);
+    const date = statinoDate.value;
+    statinoContracts.value = contracts.filter(
+      (c) => c.clientId === t.clientId && c.startDate <= date && c.endDate >= date,
+    );
+    statinoProjects.value = projects.filter((p) => p.clientId === t.clientId);
+    if (!statinoContracts.value.length) {
+      toast.error('Nessun contratto del cliente attivo in quella data');
+      return;
+    }
+    statinoOpen.value = true;
+  } catch (err) {
+    toast.error('Impossibile aprire lo statino', { description: extractErrorMessage(err) });
+  } finally {
+    statinoLoading.value = false;
+  }
+}
+
+async function onStatinoSaved(entry: Entry) {
+  const t = props.task!;
+  try {
+    const saved = await tasksRepo.update(auth.uid!, t.id, {
+      num: t.num,
+      clientId: t.clientId,
+      title: t.title,
+      description: t.description,
+      status: t.status,
+      archived: t.archived,
+      hours: t.hours,
+      order: t.order,
+      createdAt: t.createdAt ?? null,
+      doneAt: t.doneAt ?? null,
+      statinoEntryId: entry.id,
+    });
+    emit('saved', saved);
+    emit('update:open', false);
+  } catch (err) {
+    toast.error('Attività salvata in statino, ma ticket non aggiornato', {
+      description: extractErrorMessage(err),
+    });
+  }
+}
+
 async function submit() {
   if (!valid.value) return;
   submitting.value = true;
@@ -137,6 +212,7 @@ async function submit() {
         order: topOrderIn('todo'),
         createdAt: todayIso(),
         doneAt: null,
+        statinoEntryId: null,
       });
     } else {
       const t = props.task!;
@@ -162,6 +238,7 @@ async function submit() {
         order: newColumn === oldColumn ? t.order : topOrderIn(newColumn, t.id),
         createdAt: t.createdAt ?? null,
         doneAt,
+        statinoEntryId: t.statinoEntryId ?? null,
       });
     }
     toast.success(props.mode === 'create' ? 'Attività creata' : 'Attività aggiornata', {
@@ -259,6 +336,17 @@ function handleOpenChange(v: boolean) {
 
         <DialogFooter>
           <Button
+            v-if="canSendToStatino"
+            type="button"
+            variant="secondary"
+            size="sm"
+            class="sm:mr-auto"
+            :disabled="submitting || statinoLoading"
+            @click="openStatino"
+          >
+            {{ statinoLoading ? 'Apertura…' : 'A statino' }}
+          </Button>
+          <Button
             type="button"
             variant="outline"
             size="sm"
@@ -274,4 +362,17 @@ function handleOpenChange(v: boolean) {
       </form>
     </DialogContent>
   </Dialog>
+
+  <EntryFormDialog
+    v-if="task"
+    v-model:open="statinoOpen"
+    mode="create"
+    :entry="null"
+    :date="statinoDate"
+    :client-id="task.clientId"
+    :contracts="statinoContracts"
+    :projects="statinoProjects"
+    :prefill="statinoPrefill"
+    @saved="onStatinoSaved"
+  />
 </template>

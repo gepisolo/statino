@@ -94,6 +94,8 @@ export interface InvoicePayment {
 // creation day, `doneAt` the day the task entered Done OK/KO (cleared
 // if it moves back); both missing on docs predating them, `doneAt`
 // stays unknown for tasks already done before the field existed.
+// `statinoEntryId` links the statino entry created from the task via
+// the "A statino" button (one-shot: set = the button is gone).
 export type TaskStatus = 'todo' | 'wip' | 'done_ok' | 'done_ko';
 export interface Task {
   id: string;
@@ -107,6 +109,7 @@ export interface Task {
   order: number;
   createdAt?: string | null; // YYYY-MM-DD
   doneAt?: string | null; // YYYY-MM-DD
+  statinoEntryId?: string | null;
 }
 
 // A discount applied at invoice creation: `amount` (€) is subtracted

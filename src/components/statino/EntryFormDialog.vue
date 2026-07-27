@@ -38,6 +38,8 @@ const props = defineProps<{
   // entry's own contract when editing).
   contracts: Contract[];
   projects: Project[];
+  // Initial field values in create mode (used by "A statino" on tasks).
+  prefill?: { ticket?: string; description?: string; hours?: number | null } | null;
 }>();
 
 const emit = defineEmits<{
@@ -96,10 +98,10 @@ watch(
     } else {
       contractId.value = props.contracts.length === 1 ? props.contracts[0].id : '';
       projectId.value = NO_PROJECT;
-      ticket.value = '';
+      ticket.value = props.prefill?.ticket ?? '';
       link.value = '';
-      description.value = '';
-      hours.value = '';
+      description.value = props.prefill?.description ?? '';
+      hours.value = props.prefill?.hours != null ? String(props.prefill.hours) : '';
     }
   },
 );

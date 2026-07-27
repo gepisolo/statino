@@ -4,7 +4,7 @@ Personal timesheet app ("statino") replacing an Excel sheet: hours logged
 per day, per client, against yearly contracts. Single user (Google login),
 data on Firestore. UI language: Italian.
 
-## Status (2026-07-27, v0.26.0)
+## Status (2026-07-27, v0.27.0)
 
 **Done and deployed** to https://statino-gepisolo.web.app (CI green):
 
@@ -208,6 +208,18 @@ data on Firestore. UI language: Italian.
   YYYY-MM-DD strings, missing on docs predating the fields (`doneAt`
   stays null for tasks already done before it existed). Saved only, not
   shown in the UI yet.
+
+- "A statino" from done tickets (v0.27.0): the task dialog of a Done
+  OK/KO task shows a one-shot secondary button "A statino" bottom-left
+  (`sm:mr-auto` in the footer). It opens `EntryFormDialog` (new
+  optional `prefill` prop, create mode only) on the task's client and
+  `doneAt` day (today if missing), prefilled with ticket `#<num>`,
+  descrizione = task title (title only — deliberate), ore = task hours;
+  only the contract is left to pick (contracts+projects fetched on
+  click, filtered client+date; no active contract → toast, no dialog).
+  Saving the entry stamps `tasks.statinoEntryId` and closes both
+  dialogs; the button never shows again for that task (missing = never
+  sent, on older docs too).
 
 The owner now uses the app with real data (registries created by hand,
 2026 backlog imported): it has passed real usage, not just typecheck.
