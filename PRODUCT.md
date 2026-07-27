@@ -51,10 +51,11 @@ year. No neighboring product models this situation exactly.
 ## Capabilities and Constraints
 
 - Capabilities: statino month grid (multiple entries/day, contract-
-  gated), client/contract/project registries, invoices with entry
-  locking and payment recording, fiscal settings per year, net-income
-  calc, statistics section (per month/client/year). See CLAUDE.md
-  Status for detail.
+  gated) with client-facing PDF export of the month, client/contract/
+  project registries, invoices with entry locking, optional discount
+  and payment recording, fiscal settings per year, net-income calc,
+  statistics section (per month/client/year), tasks kanban ("Attività":
+  TODO/WIP/Done + archive). See CLAUDE.md Status for detail.
 - UI language: **Italian**, always.
 - Full-Firebase (Firestore + Auth), no backend; Google login means the
   deployed app cannot be driven headlessly for verification.
