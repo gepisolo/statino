@@ -4,7 +4,7 @@ Personal timesheet app ("statino") replacing an Excel sheet: hours logged
 per day, per client, against yearly contracts. Single user (Google login),
 data on Firestore. UI language: Italian.
 
-## Status (2026-07-27, v0.18.0)
+## Status (2026-07-27, v0.19.0)
 
 **Done and deployed** to https://statino-gepisolo.web.app (CI green):
 
@@ -128,6 +128,16 @@ data on Firestore. UI language: Italian.
   v-model stays a `YYYY-MM-DD` string ('' = empty) so dialog logic is
   unchanged; no real `<input>` exists, so password managers ignore it.
   `@internationalized/date` added as a direct dep (was transitive).
+
+- Invoice date backfill (v0.19.0): invoices predating the `date` field
+  showed "—" in the list with no way to set it (invoices have no edit).
+  Only when the date is missing, both the table cell and the mobile
+  card show a pencil icon that opens the calendar popover directly
+  (`DatePickerPanel.vue`, extracted from `DatePicker.vue` and shared);
+  picking a day saves immediately via `invoicesRepo.setDate()` and
+  re-sorts the list. The calendar opens on the invoice's `dateTo`
+  month (`default-placeholder`), since the issue date is usually near
+  the period end.
 
 The owner now uses the app with real data (registries created by hand,
 2026 backlog imported): it has passed real usage, not just typecheck.

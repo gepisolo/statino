@@ -102,6 +102,10 @@ export const invoicesRepo = {
     await batch.commit();
     return { id: ref.id, ...data };
   },
+  // Backfills the issue date on invoices created before the field existed.
+  async setDate(uid: string, id: string, date: string): Promise<void> {
+    await updateDoc(doc(db, 'users', uid, 'invoices', id), { date });
+  },
   // Records (or clears, with null) what was collected for the invoice.
   async setPayment(uid: string, id: string, payment: InvoicePayment | null): Promise<void> {
     await updateDoc(doc(db, 'users', uid, 'invoices', id), { payment });

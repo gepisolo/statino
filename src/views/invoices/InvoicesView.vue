@@ -1,8 +1,11 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue';
 import { toast } from 'vue-sonner';
-import { Banknote, MoreHorizontal, Plus, Trash2 } from '@lucide/vue';
+import { parseDate, type DateValue } from '@internationalized/date';
+import { DatePickerRoot, DatePickerTrigger } from 'reka-ui';
+import { Banknote, MoreHorizontal, Pencil, Plus, Trash2 } from '@lucide/vue';
 import { Button } from '@/components/ui/button';
+import { DatePickerPanel } from '@/components/ui/date-picker';
 import { Skeleton } from '@/components/ui/skeleton';
 import {
   Table,
@@ -69,6 +72,21 @@ function onSaved(i: Invoice) {
   invoices.value = [...invoices.value, i].sort((a, b) =>
     (b.date ?? b.dateFrom).localeCompare(a.date ?? a.dateFrom),
   );
+}
+
+// Backfill for invoices created before the issue-date field existed.
+async function setInvoiceDate(i: Invoice, v: DateValue | undefined) {
+  if (!v) return;
+  const date = v.toString();
+  try {
+    await invoicesRepo.setDate(auth.uid!, i.id, date);
+    invoices.value = invoices.value
+      .map((x) => (x.id === i.id ? { ...x, date } : x))
+      .sort((a, b) => (b.date ?? b.dateFrom).localeCompare(a.date ?? a.dateFrom));
+    toast.success('Data fattura impostata', { description: `${i.number} · ${formatDate(date)}` });
+  } catch (err) {
+    toast.error('Impossibile impostare la data', { description: extractErrorMessage(err) });
+  }
 }
 
 function openPayment(i: Invoice) {
@@ -167,7 +185,26 @@ async function confirmDelete() {
         <dl class="mt-3 space-y-1 text-sm">
           <div class="flex justify-between gap-4">
             <dt class="text-muted-foreground">Data</dt>
-            <dd class="tabular-nums">{{ i.date ? formatDate(i.date) : '—' }}</dd>
+            <dd class="tabular-nums">
+              <template v-if="i.date">{{ formatDate(i.date) }}</template>
+              <DatePickerRoot
+                v-else
+                locale="it"
+                :week-starts-on="1"
+                weekday-format="short"
+                :default-placeholder="parseDate(i.dateTo)"
+                @update:model-value="(v) => setInvoiceDate(i, v)"
+              >
+                <DatePickerTrigger
+                  class="text-muted-foreground hover:text-foreground focus-visible:ring-ring/50 -my-1 inline-flex size-7 items-center justify-center rounded-md outline-none focus-visible:ring-3"
+                  aria-label="Imposta data fattura"
+                  title="Imposta data fattura"
+                >
+                  <Pencil class="size-3.5" />
+                </DatePickerTrigger>
+                <DatePickerPanel align="end" />
+              </DatePickerRoot>
+            </dd>
           </div>
           <div class="flex justify-between gap-4">
             <dt class="text-muted-foreground">Periodo</dt>
@@ -217,7 +254,26 @@ async function confirmDelete() {
         </TableRow>
         <TableRow v-for="i in invoices" :key="i.id">
           <TableCell class="font-medium">{{ i.number }}</TableCell>
-          <TableCell class="tabular-nums">{{ i.date ? formatDate(i.date) : '—' }}</TableCell>
+          <TableCell class="tabular-nums">
+            <template v-if="i.date">{{ formatDate(i.date) }}</template>
+            <DatePickerRoot
+              v-else
+              locale="it"
+              :week-starts-on="1"
+              weekday-format="short"
+              :default-placeholder="parseDate(i.dateTo)"
+              @update:model-value="(v) => setInvoiceDate(i, v)"
+            >
+              <DatePickerTrigger
+                class="text-muted-foreground hover:text-foreground focus-visible:ring-ring/50 -my-1 inline-flex size-7 items-center justify-center rounded-md outline-none focus-visible:ring-3"
+                aria-label="Imposta data fattura"
+                title="Imposta data fattura"
+              >
+                <Pencil class="size-3.5" />
+              </DatePickerTrigger>
+              <DatePickerPanel align="start" />
+            </DatePickerRoot>
+          </TableCell>
           <TableCell>{{ clientNames.get(i.clientId) ?? '—' }}</TableCell>
           <TableCell class="tabular-nums">
             {{ formatDate(i.dateFrom) }} – {{ formatDate(i.dateTo) }}
