@@ -4,7 +4,7 @@ Personal timesheet app ("statino") replacing an Excel sheet: hours logged
 per day, per client, against yearly contracts. Single user (Google login),
 data on Firestore. UI language: Italian.
 
-## Status (2026-07-27, v0.29.0)
+## Status (2026-07-30, v0.29.1)
 
 **Done and deployed** to https://statino-gepisolo.web.app (CI green):
 
@@ -235,6 +235,15 @@ data on Firestore. UI language: Italian.
   (and the Archivio list) show a muted `CalendarCheck` icon top-right
   (next to the client name, aria-label "Riportata a statino") when
   `statinoEntryId` is set — no need to open the dialog to check.
+
+- Hosting cache headers (v0.29.1): after a deploy the browser kept
+  serving the previous build — Firebase Hosting's default
+  `cache-control: max-age=3600` on `index.html` meant the cached index
+  pointed at the old hashed chunks for up to an hour (v0.29.0 was live
+  but showed as 0.28.0 in the sidebar). `firebase.json` now sets
+  `no-cache, max-age=0` on `/index.html` (small file, always
+  revalidated) and `public, max-age=31536000, immutable` on
+  `/assets/**` (filenames are content-hashed).
 
 The owner now uses the app with real data (registries created by hand,
 2026 backlog imported): it has passed real usage, not just typecheck.
