@@ -236,14 +236,20 @@ data on Firestore. UI language: Italian.
   (next to the client name, aria-label "Riportata a statino") when
   `statinoEntryId` is set — no need to open the dialog to check.
 
-- Hosting cache headers (v0.29.1): after a deploy the browser kept
-  serving the previous build — Firebase Hosting's default
-  `cache-control: max-age=3600` on `index.html` meant the cached index
+- Hosting cache headers (v0.29.1–0.29.2): after a deploy the browser
+  kept serving the previous build — Firebase Hosting's default
+  `cache-control: max-age=3600` on the app shell meant the cached index
   pointed at the old hashed chunks for up to an hour (v0.29.0 was live
   but showed as 0.28.0 in the sidebar). `firebase.json` now sets
-  `no-cache, max-age=0` on `/index.html` (small file, always
-  revalidated) and `public, max-age=31536000, immutable` on
-  `/assets/**` (filenames are content-hashed).
+  `no-cache, max-age=0` on the shell and `public, max-age=31536000,
+  immutable` on `/assets/**` (filenames are content-hashed). Gotcha
+  behind the 0.29.2 follow-up: headers match the **requested URL**, not
+  the file the SPA rewrite resolves to, so a `/index.html` rule leaves
+  `/` and `/tasks` on the default. The no-cache rule is therefore a
+  `regex: "^/[^.]*$"` (every extension-less path, i.e. all SPA routes)
+  plus the literal `/index.html`; the three patterns are deliberately
+  disjoint, since the docs don't state which rule wins when globs
+  overlap.
 
 The owner now uses the app with real data (registries created by hand,
 2026 backlog imported): it has passed real usage, not just typecheck.
