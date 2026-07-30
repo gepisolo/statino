@@ -447,6 +447,32 @@ function entryPdfText(e: Entry): string {
   return e.description ? `${head} — ${e.description}` : head;
 }
 
+// Hours per project for the month, so the client can charge them to its
+// cost centres. Biggest first, unassigned hours last; skipped entirely
+// when no entry of the month carries a project (the recap would just
+// repeat the grand total).
+const NO_PROJECT = 'Senza progetto';
+
+function monthProjectTotals(): { name: string; hours: string }[] {
+  const byProject = new Map<string, number>();
+  let anyProject = false;
+  for (const d of days.value) {
+    for (const e of d.entries) {
+      if (e.projectId) anyProject = true;
+      const name = e.projectId ? (projectById.value.get(e.projectId)?.name ?? '—') : NO_PROJECT;
+      byProject.set(name, (byProject.get(name) ?? 0) + e.hours);
+    }
+  }
+  if (!anyProject) return [];
+  return [...byProject.entries()]
+    .sort((a, b) => {
+      if (a[0] === NO_PROJECT) return 1;
+      if (b[0] === NO_PROJECT) return -1;
+      return b[1] - a[1];
+    })
+    .map(([name, hours]) => ({ name, hours: formatHours(hours) }));
+}
+
 async function exportPdf() {
   if (!clientId.value) return;
   exporting.value = true;
@@ -459,6 +485,7 @@ async function exportPdf() {
       clientName: clientName.value,
       periodLabel: `${monthName(month.value)} ${year.value}`,
       totalHours: formatHours(totalMonthHours.value),
+      projectTotals: monthProjectTotals(),
       fileName: `statino-${slug}-${monthPrefix.value}.pdf`,
       days: days.value.map((d) => ({
         label: `${d.dayLabel} ${d.weekdayShort}`,

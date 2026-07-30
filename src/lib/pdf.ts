@@ -16,11 +16,19 @@ export interface StatinoPdfDay {
   entries: StatinoPdfEntry[];
 }
 
+export interface StatinoPdfProjectTotal {
+  name: string; // project name, or "Senza progetto"
+  hours: string;
+}
+
 export interface StatinoPdfInput {
   clientName: string;
   periodLabel: string; // "luglio 2026"
   totalHours: string;
   days: StatinoPdfDay[];
+  // Recap table under the grid, so the client can charge the hours to
+  // its own cost centres. Empty when the month has no project at all.
+  projectTotals: StatinoPdfProjectTotal[];
   fileName: string;
 }
 
@@ -100,6 +108,48 @@ export async function exportStatinoPdf(input: StatinoPdfInput): Promise<void> {
       }
     },
   });
+
+  // Per-project recap, on its own page when the grid leaves no room.
+  if (input.projectTotals.length) {
+    const pageHeight = doc.internal.pageSize.getHeight();
+    const gridEnd = (doc as unknown as { lastAutoTable?: { finalY: number } }).lastAutoTable
+      ?.finalY;
+    // Title + head + rows + foot, roughly: below that, start a new page.
+    const needed = 14 + (input.projectTotals.length + 2) * 6;
+    let y = (gridEnd ?? 30) + 10;
+    if (y + needed > pageHeight - 14) {
+      doc.addPage();
+      y = 18;
+    }
+
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(11);
+    doc.text('Totale per progetto', 14, y);
+
+    autoTable(doc, {
+      startY: y + 4,
+      theme: 'grid',
+      head: [['Progetto', 'Ore']],
+      body: input.projectTotals.map((p) => [p.name, p.hours]),
+      foot: [['TOTALE', input.totalHours]],
+      styles: {
+        font: 'helvetica',
+        fontSize: 8.5,
+        cellPadding: 1.6,
+        lineColor: [225, 225, 225],
+        lineWidth: 0.15,
+        textColor: 30,
+      },
+      headStyles: { fillColor: [242, 242, 242], textColor: 30, fontStyle: 'bold' },
+      footStyles: { fillColor: [242, 242, 242], textColor: 30, fontStyle: 'bold' },
+      columnStyles: { 1: { cellWidth: 20, halign: 'right' } },
+      didParseCell: (data) => {
+        if (data.section !== 'body' && data.column.index === 1) {
+          data.cell.styles.halign = 'right';
+        }
+      },
+    });
+  }
 
   doc.setProperties({ title: `Statino ${input.clientName} — ${input.periodLabel}` });
   doc.save(input.fileName);

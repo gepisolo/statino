@@ -4,7 +4,7 @@ Personal timesheet app ("statino") replacing an Excel sheet: hours logged
 per day, per client, against yearly contracts. Single user (Google login),
 data on Firestore. UI language: Italian.
 
-## Status (2026-07-30, v0.30.0)
+## Status (2026-07-30, v0.31.0)
 
 **Done and deployed** to https://statino-gepisolo.web.app (CI green):
 
@@ -235,6 +235,26 @@ data on Firestore. UI language: Italian.
   (and the Archivio list) show a muted `CalendarCheck` icon top-right
   (next to the client name, aria-label "Riportata a statino") when
   `statinoEntryId` is set — no need to open the dialog to check.
+
+- Per-project breakdown (v0.31.0), two places:
+  - "Statistiche per cliente" table: each client row is expandable
+    (chevron, `expanded` Set) into one row per project — plus a
+    "Senza progetto" bucket for entries with `projectId: null`, always
+    last. Only **Ore** and **Fatturabile** are split, because both come
+    from the entries; **Fatturato** and **Incassato** show "—" on the
+    project rows, since invoices and payments carry no project and any
+    split would be invented (a footnote in the card says so). Hour
+    shares stay measured against the grand total, so the project rows
+    add up to their client's own percentage. Clients whose entries all
+    lack a project get no chevron.
+  - Statino PDF: a "Totale per progetto" table under the grid (hours
+    only, same as the rest of the export — no rates or amounts), so the
+    client can charge the hours to its cost centres. Same "Senza
+    progetto" bucket, biggest first; the whole table is omitted when no
+    entry of the month has a project. It starts on a new page when the
+    grid leaves less room than the recap needs (`lastAutoTable.finalY`
+    + a size estimate); verified in Node on a full month (recap lands
+    on the grid's last page) and a light one (recap moves to page 2).
 
 - One-click archive on the board (v0.30.0): Done cards show an
   `Archive` button top-right, next to the statino badge when present

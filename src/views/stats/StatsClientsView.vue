@@ -19,17 +19,19 @@ import {
   TableRow,
 } from '@/components/ui/table';
 import BarChart from '@/components/stats/BarChart.vue';
+import { ChevronRight } from '@lucide/vue';
 import {
   clientsRepo,
   contractsRepo,
   entriesRepo,
   invoicesRepo,
+  projectsRepo,
   extractErrorMessage,
 } from '@/lib/db';
 import { formatEur, formatHours } from '@/lib/format';
 import { periodTotals, yearRange, type PeriodTotals } from '@/lib/stats';
 import { useAuthStore } from '@/stores/auth';
-import type { Client, Contract, Entry, Invoice } from '@/types/models';
+import type { Client, Contract, Entry, Invoice, Project } from '@/types/models';
 
 const auth = useAuthStore();
 
@@ -41,6 +43,7 @@ const loadingEntries = ref(true);
 const clients = ref<Client[]>([]);
 const contracts = ref<Contract[]>([]);
 const invoices = ref<Invoice[]>([]);
+const projects = ref<Project[]>([]);
 const entries = ref<Entry[]>([]);
 
 const yearOptions = computed(() => {
@@ -50,10 +53,11 @@ const yearOptions = computed(() => {
 
 onMounted(async () => {
   try {
-    [clients.value, contracts.value, invoices.value] = await Promise.all([
+    [clients.value, contracts.value, invoices.value, projects.value] = await Promise.all([
       clientsRepo.list(auth.uid!),
       contractsRepo.list(auth.uid!),
       invoicesRepo.list(auth.uid!),
+      projectsRepo.list(auth.uid!),
     ]);
   } catch (err) {
     toast.error('Impossibile caricare i dati', { description: extractErrorMessage(err) });
@@ -82,8 +86,47 @@ const loading = computed(() => loadingCatalogs.value || loadingEntries.value);
 
 const rates = computed(() => new Map(contracts.value.map((c) => [c.id, c.hourlyRate])));
 
+const projectNames = computed(() => new Map(projects.value.map((p) => [p.id, p.name])));
+
+// Breakdown under a client row. Only hours and billable can be split by
+// project: both come from the entries. Invoices (and their payments)
+// have no project, so "fatturato" and "incassato" stay client-level —
+// splitting them would mean inventing a share.
+const NO_PROJECT = 'Senza progetto';
+
+interface ProjectRow {
+  key: string; // project id, '' for the unassigned bucket
+  name: string;
+  hours: number;
+  billable: number;
+}
+
+function projectRows(clientEntries: Entry[], from: string, to: string): ProjectRow[] {
+  const byKey = new Map<string, ProjectRow>();
+  for (const e of clientEntries) {
+    if (e.date < from || e.date > to) continue;
+    const key = e.projectId ?? '';
+    const row = byKey.get(key) ?? {
+      key,
+      name: e.projectId ? (projectNames.value.get(e.projectId) ?? '—') : NO_PROJECT,
+      hours: 0,
+      billable: 0,
+    };
+    row.hours += e.hours;
+    row.billable += e.hours * (rates.value.get(e.contractId) ?? 0);
+    byKey.set(key, row);
+  }
+  // Biggest first, unassigned hours last.
+  return [...byKey.values()].sort((a, b) => {
+    if (a.key === '') return 1;
+    if (b.key === '') return -1;
+    return b.billable - a.billable;
+  });
+}
+
 interface ClientRow extends PeriodTotals {
   client: Client;
+  projects: ProjectRow[];
 }
 
 // One row per client with activity or invoices in the year, busiest
@@ -91,16 +134,20 @@ interface ClientRow extends PeriodTotals {
 const rows = computed<ClientRow[]>(() => {
   const [from, to] = yearRange(year.value);
   return clients.value
-    .map((client) => ({
-      client,
-      ...periodTotals(
-        entries.value.filter((e) => e.clientId === client.id),
-        invoices.value.filter((i) => i.clientId === client.id),
-        rates.value,
-        from,
-        to,
-      ),
-    }))
+    .map((client) => {
+      const clientEntries = entries.value.filter((e) => e.clientId === client.id);
+      return {
+        client,
+        projects: projectRows(clientEntries, from, to),
+        ...periodTotals(
+          clientEntries,
+          invoices.value.filter((i) => i.clientId === client.id),
+          rates.value,
+          from,
+          to,
+        ),
+      };
+    })
     .filter((r) => r.hours > 0 || r.invoiced > 0 || r.collected > 0)
     .sort((a, b) => b.billable - a.billable);
 });
@@ -131,6 +178,20 @@ function eurTick(n: number): string {
 
 function share(part: number, whole: number): number {
   return whole > 0 ? (part / whole) * 100 : 0;
+}
+
+// Expanding a client shows its projects. Shares stay measured against
+// the grand total, so the project rows add up to their client's own.
+const expanded = ref(new Set<string>());
+
+function expandable(r: ClientRow): boolean {
+  return r.projects.some((p) => p.key !== '');
+}
+
+function toggle(clientId: string) {
+  const next = new Set(expanded.value);
+  if (!next.delete(clientId)) next.add(clientId);
+  expanded.value = next;
 }
 </script>
 
@@ -209,26 +270,86 @@ function share(part: number, whole: number): number {
               </TableRow>
             </TableHeader>
             <TableBody>
-              <TableRow v-for="r in rows" :key="r.client.id">
-                <TableCell class="font-medium">{{ r.client.name }}</TableCell>
-                <TableCell class="text-right tabular-nums">{{ formatHours(r.hours) }}</TableCell>
-                <TableCell>
-                  <div class="flex items-center gap-2">
-                    <div class="h-1.5 flex-1 overflow-hidden rounded-full bg-secondary">
-                      <div
-                        class="h-full rounded-full bg-primary"
-                        :style="{ width: `${share(r.hours, totals.hours)}%` }"
+              <template v-for="r in rows" :key="r.client.id">
+                <TableRow>
+                  <TableCell class="font-medium">
+                    <button
+                      v-if="expandable(r)"
+                      type="button"
+                      class="flex cursor-pointer items-center gap-1.5 rounded-sm text-left focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
+                      :aria-expanded="expanded.has(r.client.id)"
+                      :title="
+                        expanded.has(r.client.id) ? 'Nascondi i progetti' : 'Mostra i progetti'
+                      "
+                      @click="toggle(r.client.id)"
+                    >
+                      <ChevronRight
+                        class="size-3.5 shrink-0 text-muted-foreground transition-transform"
+                        :class="expanded.has(r.client.id) && 'rotate-90'"
                       />
+                      {{ r.client.name }}
+                    </button>
+                    <span v-else class="pl-5">{{ r.client.name }}</span>
+                  </TableCell>
+                  <TableCell class="text-right tabular-nums">{{ formatHours(r.hours) }}</TableCell>
+                  <TableCell>
+                    <div class="flex items-center gap-2">
+                      <div class="h-1.5 flex-1 overflow-hidden rounded-full bg-secondary">
+                        <div
+                          class="h-full rounded-full bg-primary"
+                          :style="{ width: `${share(r.hours, totals.hours)}%` }"
+                        />
+                      </div>
+                      <span class="w-9 text-right text-xs tabular-nums text-muted-foreground">
+                        {{ Math.round(share(r.hours, totals.hours)) }}%
+                      </span>
                     </div>
-                    <span class="w-9 text-right text-xs tabular-nums text-muted-foreground">
-                      {{ Math.round(share(r.hours, totals.hours)) }}%
-                    </span>
-                  </div>
-                </TableCell>
-                <TableCell class="text-right tabular-nums">{{ formatEur(r.billable) }}</TableCell>
-                <TableCell class="text-right tabular-nums">{{ formatEur(r.invoiced) }}</TableCell>
-                <TableCell class="text-right tabular-nums">{{ formatEur(r.collected) }}</TableCell>
-              </TableRow>
+                  </TableCell>
+                  <TableCell class="text-right tabular-nums">{{ formatEur(r.billable) }}</TableCell>
+                  <TableCell class="text-right tabular-nums">{{ formatEur(r.invoiced) }}</TableCell>
+                  <TableCell class="text-right tabular-nums">{{
+                    formatEur(r.collected)
+                  }}</TableCell>
+                </TableRow>
+                <TableRow
+                  v-for="p in expanded.has(r.client.id) ? r.projects : []"
+                  :key="`${r.client.id}-${p.key}`"
+                  class="bg-muted/40"
+                >
+                  <TableCell class="pl-10 text-muted-foreground">{{ p.name }}</TableCell>
+                  <TableCell class="text-right tabular-nums text-muted-foreground">
+                    {{ formatHours(p.hours) }}
+                  </TableCell>
+                  <TableCell>
+                    <div class="flex items-center gap-2">
+                      <div class="h-1.5 flex-1 overflow-hidden rounded-full bg-secondary">
+                        <div
+                          class="h-full rounded-full bg-primary/50"
+                          :style="{ width: `${share(p.hours, totals.hours)}%` }"
+                        />
+                      </div>
+                      <span class="w-9 text-right text-xs tabular-nums text-muted-foreground">
+                        {{ Math.round(share(p.hours, totals.hours)) }}%
+                      </span>
+                    </div>
+                  </TableCell>
+                  <TableCell class="text-right tabular-nums text-muted-foreground">
+                    {{ formatEur(p.billable) }}
+                  </TableCell>
+                  <TableCell
+                    class="text-right text-muted-foreground"
+                    title="Le fatture non sono legate a un progetto"
+                  >
+                    —
+                  </TableCell>
+                  <TableCell
+                    class="text-right text-muted-foreground"
+                    title="Gli incassi non sono legati a un progetto"
+                  >
+                    —
+                  </TableCell>
+                </TableRow>
+              </template>
               <TableRow class="font-medium">
                 <TableCell>Totale</TableCell>
                 <TableCell class="text-right tabular-nums">{{
@@ -247,6 +368,11 @@ function share(part: number, whole: number): number {
               </TableRow>
             </TableBody>
           </Table>
+          <p class="mt-3 text-xs text-muted-foreground">
+            Apri un cliente per vedere il dettaglio per progetto. Ore e fatturabile si ripartiscono
+            tra i progetti perché arrivano dalle attività; fatturato e incassato restano solo sulla
+            riga del cliente, perché fatture e incassi non sono legati a un progetto.
+          </p>
         </CardContent>
       </Card>
     </template>

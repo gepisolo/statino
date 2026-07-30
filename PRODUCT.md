@@ -51,7 +51,9 @@ year. No neighboring product models this situation exactly.
 ## Capabilities and Constraints
 
 - Capabilities: statino month grid (multiple entries/day, contract-
-  gated) with client-facing PDF export of the month, client/contract/
+  gated) with client-facing PDF export of the month (grid + per-project
+  hour recap, so the client can charge them to its cost centres),
+  client/contract/
   project registries, invoices with entry locking, optional discount
   and payment recording, fiscal settings per year, net-income calc,
   statistics section (per month/client/year), tasks kanban ("Attività":
