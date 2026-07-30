@@ -4,7 +4,7 @@ Personal timesheet app ("statino") replacing an Excel sheet: hours logged
 per day, per client, against yearly contracts. Single user (Google login),
 data on Firestore. UI language: Italian.
 
-## Status (2026-07-30, v0.29.1)
+## Status (2026-07-30, v0.30.0)
 
 **Done and deployed** to https://statino-gepisolo.web.app (CI green):
 
@@ -235,6 +235,17 @@ data on Firestore. UI language: Italian.
   (and the Archivio list) show a muted `CalendarCheck` icon top-right
   (next to the client name, aria-label "Riportata a statino") when
   `statinoEntryId` is set — no need to open the dialog to check.
+
+- One-click archive on the board (v0.30.0): Done cards show an
+  `Archive` button top-right, next to the statino badge when present
+  (both live in a small icon row beside the client name). Click →
+  `tasksRepo.archive()` (partial `updateDoc`: only `archived` + a
+  top-of-archive `order`; the done outcome and `doneAt` are untouched),
+  optimistic local update rolled back on error, success toast, no
+  confirm — the Archivio tab keeps the card and the dialog can send it
+  back. Deliberately Done-only, matching the dialog's "Archiviata"
+  option: archiving a TODO/WIP task would have to invent a done
+  outcome, since `archived` is a flag over a done status.
 
 - Hosting cache headers (v0.29.1–0.29.2): after a deploy the browser
   kept serving the previous build — Firebase Hosting's default

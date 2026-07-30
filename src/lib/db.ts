@@ -156,6 +156,11 @@ export const invoicesRepo = {
 // batch: volumes are tiny.
 export const tasksRepo = {
   ...makeRepo<Task>('tasks', (a, b) => a.order - b.order),
+  // One-click archiving from the board: only the flag and the position
+  // in the archive change — the done outcome (and its doneAt) stay put.
+  async archive(uid: string, id: string, order: number): Promise<void> {
+    await updateDoc(doc(db, 'users', uid, 'tasks', id), { archived: true, order });
+  },
   async reorder(
     uid: string,
     updates: { id: string; order: number; status?: TaskStatus; doneAt?: string | null }[],

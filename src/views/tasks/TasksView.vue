@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue';
 import { toast } from 'vue-sonner';
-import { CalendarCheck, Plus } from '@lucide/vue';
+import { Archive, CalendarCheck, Plus } from '@lucide/vue';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
@@ -159,6 +159,36 @@ async function onDrop(col: Column, target?: Task) {
   }
 }
 
+// --- Archiving straight from a Done card: no dialog, no confirm (the
+// Archivio tab keeps it, and the dialog can send it back). Offered only
+// on Done cards, like the dialog's "Archiviata" option — archiving a
+// TODO/WIP task would have to invent a done outcome for it. ---
+
+const archivingId = ref<string | null>(null);
+
+function canArchive(t: Task): boolean {
+  return !t.archived && columnOf(t) === 'done';
+}
+
+async function archive(t: Task) {
+  if (archivingId.value) return;
+  archivingId.value = t.id;
+  // The archived list is ordered like a column: entering it lands on top.
+  const orders = archivedTasks.value.map((x) => x.order);
+  const order = orders.length ? Math.min(...orders) - 1 : 0;
+  const previous = tasks.value;
+  tasks.value = tasks.value.map((x) => (x.id === t.id ? { ...x, archived: true, order } : x));
+  try {
+    await tasksRepo.archive(auth.uid!, t.id, order);
+    toast.success('Attività archiviata', { description: `#${t.num} · ${t.title}` });
+  } catch (err) {
+    tasks.value = previous;
+    toast.error("Impossibile archiviare l'attività", { description: extractErrorMessage(err) });
+  } finally {
+    archivingId.value = null;
+  }
+}
+
 function cardClass(t: Task): string {
   const classes: string[] = [];
   if (t.status === 'done_ok' && (columnOf(t) === 'done' || t.archived)) {
@@ -249,11 +279,25 @@ function cardClass(t: Task): string {
               >
                 <div class="flex items-center justify-between gap-2 text-xs text-muted-foreground">
                   <span class="truncate">{{ clientNames.get(t.clientId) ?? '—' }}</span>
-                  <CalendarCheck
-                    v-if="t.statinoEntryId"
-                    class="size-3.5 shrink-0"
-                    aria-label="Riportata a statino"
-                  />
+                  <div class="flex shrink-0 items-center gap-1.5">
+                    <CalendarCheck
+                      v-if="t.statinoEntryId"
+                      class="size-3.5"
+                      aria-label="Riportata a statino"
+                    />
+                    <button
+                      v-if="canArchive(t)"
+                      type="button"
+                      draggable="false"
+                      class="cursor-pointer rounded-sm p-0.5 hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none disabled:opacity-50 pointer-coarse:p-1"
+                      :disabled="archivingId === t.id"
+                      title="Archivia"
+                      aria-label="Archivia attività"
+                      @click.stop="archive(t)"
+                    >
+                      <Archive class="size-3.5" />
+                    </button>
+                  </div>
                 </div>
                 <div class="text-sm font-medium">{{ t.title }}</div>
               </div>
