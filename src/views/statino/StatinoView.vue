@@ -34,6 +34,7 @@ import {
   extractErrorMessage,
 } from '@/lib/db';
 import { exportStatinoPdf } from '@/lib/pdf';
+import { badgeClass, badgeStyle } from '@/lib/colors';
 import { computeNet } from '@/lib/tax';
 import {
   daysInMonth,
@@ -635,7 +636,8 @@ watch(loading, async (isLoading) => {
                     </span>
                     <span
                       v-if="e.projectId"
-                      class="rounded bg-accent px-1.5 py-0.5 text-xs text-accent-foreground"
+                      :class="badgeClass(projectById.get(e.projectId))"
+                      :style="badgeStyle(projectById.get(e.projectId))"
                     >
                       {{ projectById.get(e.projectId)?.name ?? '—' }}
                     </span>

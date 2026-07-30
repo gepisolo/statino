@@ -13,6 +13,11 @@ export interface Project {
   // Inactive projects are hidden from the entry editor's dropdown.
   // Docs created before this field existed don't have it: missing = active.
   active?: boolean;
+  // Badge colors, '#rrggbb'. Both null (or missing, on older docs) means
+  // the badge keeps the theme's default look, which follows light/dark;
+  // a custom pair is fixed, so it must read on both. See `lib/colors.ts`.
+  bgColor?: string | null;
+  textColor?: string | null;
 }
 
 // One contract per (client, activity): the same client can pay different

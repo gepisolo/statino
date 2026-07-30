@@ -29,6 +29,7 @@ import {
 } from '@/components/ui/dialog';
 import ProjectFormDialog from '@/components/projects/ProjectFormDialog.vue';
 import { clientsRepo, projectsRepo, extractErrorMessage } from '@/lib/db';
+import { badgeClass, badgeStyle } from '@/lib/colors';
 import { useAuthStore } from '@/stores/auth';
 import type { Client, Project } from '@/types/models';
 
@@ -93,10 +94,14 @@ function onSaved(p: Project) {
 async function toggleActive(p: Project, active: boolean) {
   togglingId.value = p.id;
   try {
+    // setDoc replaces the doc: carry over every field the switch doesn't
+    // touch, or the badge colors would be wiped on each toggle.
     const saved = await projectsRepo.update(auth.uid!, p.id, {
       clientId: p.clientId,
       name: p.name,
       active,
+      bgColor: p.bgColor ?? null,
+      textColor: p.textColor ?? null,
     });
     onSaved(saved);
   } catch (err) {
@@ -172,8 +177,8 @@ async function confirmDelete() {
           </TableCell>
         </TableRow>
         <TableRow v-for="p in projects" :key="p.id">
-          <TableCell class="font-medium" :class="p.active === false ? 'text-muted-foreground' : ''">
-            {{ p.name }}
+          <TableCell :class="p.active === false ? 'opacity-60' : ''">
+            <span :class="badgeClass(p)" :style="badgeStyle(p)">{{ p.name }}</span>
           </TableCell>
           <TableCell>
             <Switch

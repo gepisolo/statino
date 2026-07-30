@@ -28,6 +28,7 @@ import {
   projectsRepo,
   extractErrorMessage,
 } from '@/lib/db';
+import { badgeClass, badgeStyle } from '@/lib/colors';
 import { formatEur, formatHours } from '@/lib/format';
 import { periodTotals, yearRange, type PeriodTotals } from '@/lib/stats';
 import { useAuthStore } from '@/stores/auth';
@@ -86,7 +87,7 @@ const loading = computed(() => loadingCatalogs.value || loadingEntries.value);
 
 const rates = computed(() => new Map(contracts.value.map((c) => [c.id, c.hourlyRate])));
 
-const projectNames = computed(() => new Map(projects.value.map((p) => [p.id, p.name])));
+const projectById = computed(() => new Map(projects.value.map((p) => [p.id, p])));
 
 // Breakdown under a client row. Only hours and billable can be split by
 // project: both come from the entries. Invoices (and their payments)
@@ -97,6 +98,7 @@ const NO_PROJECT = 'Senza progetto';
 interface ProjectRow {
   key: string; // project id, '' for the unassigned bucket
   name: string;
+  project: Project | null; // carries the badge colors
   hours: number;
   billable: number;
 }
@@ -106,9 +108,11 @@ function projectRows(clientEntries: Entry[], from: string, to: string): ProjectR
   for (const e of clientEntries) {
     if (e.date < from || e.date > to) continue;
     const key = e.projectId ?? '';
+    const project = e.projectId ? (projectById.value.get(e.projectId) ?? null) : null;
     const row = byKey.get(key) ?? {
       key,
-      name: e.projectId ? (projectNames.value.get(e.projectId) ?? '—') : NO_PROJECT,
+      name: project?.name ?? (e.projectId ? '—' : NO_PROJECT),
+      project,
       hours: 0,
       billable: 0,
     };
@@ -316,7 +320,16 @@ function toggle(clientId: string) {
                   :key="`${r.client.id}-${p.key}`"
                   class="bg-muted/40"
                 >
-                  <TableCell class="pl-10 text-muted-foreground">{{ p.name }}</TableCell>
+                  <TableCell class="pl-10">
+                    <span
+                      v-if="p.project"
+                      :class="badgeClass(p.project)"
+                      :style="badgeStyle(p.project)"
+                    >
+                      {{ p.name }}
+                    </span>
+                    <span v-else class="text-muted-foreground">{{ p.name }}</span>
+                  </TableCell>
                   <TableCell class="text-right tabular-nums text-muted-foreground">
                     {{ formatHours(p.hours) }}
                   </TableCell>

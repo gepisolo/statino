@@ -4,7 +4,7 @@ Personal timesheet app ("statino") replacing an Excel sheet: hours logged
 per day, per client, against yearly contracts. Single user (Google login),
 data on Firestore. UI language: Italian.
 
-## Status (2026-07-30, v0.31.0)
+## Status (2026-07-30, v0.32.0)
 
 **Done and deployed** to https://statino-gepisolo.web.app (CI green):
 
@@ -236,6 +236,22 @@ data on Firestore. UI language: Italian.
   (next to the client name, aria-label "Riportata a statino") when
   `statinoEntryId` is set — no need to open the dialog to check.
 
+- Project badge colors (v0.32.0): a project can carry `bgColor` +
+  `textColor` (`#rrggbb`), edited in `ProjectFormDialog` with two
+  native color pickers, a live badge preview and 18 ready-made pairs
+  (`BADGE_PRESETS` in the new `lib/colors.ts`) — all verified at ≥5:1
+  contrast, so they read in both themes. Colors are opt-in: without a
+  pair the badge keeps `bg-accent`/`text-accent-foreground`, which is
+  the only variant that follows light/dark ("Ripristina predefiniti"
+  goes back to it by saving null/null). `contrastRatio()` flags a
+  hand-picked pair below 4.5:1 without blocking the save. Consumers go
+  through `badgeClass()`/`badgeStyle()`: statino grid, projects list,
+  per-project rows in the client stats, plus a color dot in the entry
+  editor's project select. Not in the PDF — that export stays neutral.
+  Watch out: `projectsRepo.update` is a `setDoc`, so `toggleActive` in
+  `ProjectsView` had to start carrying the colors over (it would have
+  wiped them on every switch).
+
 - Per-project breakdown (v0.31.0), two places:
   - "Statistiche per cliente" table: each client row is expandable
     (chevron, `expanded` Set) into one row per project — plus a
@@ -347,7 +363,9 @@ npm run format       # prettier --write
 ## Domain model (`src/types/models.ts`)
 
 - `users/{uid}/clients` — `{ name }`
-- `users/{uid}/projects` — `{ clientId, name, active? }` (some clients
+- `users/{uid}/projects` — `{ clientId, name, active?, bgColor?,
+  textColor? }` (colors are `#rrggbb` badge colors, both null/missing =
+  theme default; see `lib/colors.ts`) (some clients
   want hours split by project; `active` missing = active)
 - `users/{uid}/contracts` — `{ clientId, activity, startDate, endDate,
   annualHours, hourlyRate }`. One doc per (client, activity): the same

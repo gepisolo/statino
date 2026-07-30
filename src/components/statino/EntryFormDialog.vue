@@ -183,7 +183,14 @@ function handleOpenChange(v: boolean) {
             <SelectContent>
               <SelectItem :value="NO_PROJECT">Nessun progetto</SelectItem>
               <SelectItem v-for="p in selectableProjects" :key="p.id" :value="p.id">
-                {{ p.name }}
+                <span class="flex items-center gap-2">
+                  <span
+                    v-if="p.bgColor"
+                    class="size-2 shrink-0 rounded-full"
+                    :style="{ backgroundColor: p.bgColor }"
+                  />
+                  {{ p.name }}
+                </span>
               </SelectItem>
             </SelectContent>
           </Select>
