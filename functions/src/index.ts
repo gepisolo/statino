@@ -38,6 +38,12 @@ const ADMIN_EMAIL = 'gepisolo@gmail.com';
 type FicOp =
   | { op: 'companies'; integrationId?: string; token?: string }
   | { op: 'entities'; integrationId: string; companyId: number }
+  // Anagrafica completa: FIC non ricava i dati del destinatario dall'id,
+  // usa quello che gli mandiamo come fotografia sul documento.
+  | { op: 'entity'; integrationId: string; companyId: number; entityId: number }
+  // Rilettura di un documento: serve a verificare cosa è stato creato
+  // davvero, invece di dedurlo.
+  | { op: 'document'; integrationId: string; companyId: number; documentId: number }
   | { op: 'vatTypes'; integrationId: string; companyId: number }
   | { op: 'paymentMethods'; integrationId: string; companyId: number }
   | { op: 'createInvoice'; integrationId: string; companyId: number; document: unknown };
@@ -179,6 +185,17 @@ export const fattureincloud = onCall<FicOp>(OPTIONS, async (request) => {
       return unwrapCompanies(await ficFetch('/user/companies', token));
     case 'entities':
       return listEntities(data.companyId, token);
+    case 'entity':
+      return unwrap(
+        await ficFetch(`/c/${data.companyId}/entities/clients/${data.entityId}`, token),
+      );
+    case 'document':
+      return unwrap(
+        await ficFetch(
+          `/c/${data.companyId}/issued_documents/${data.documentId}?fieldset=detailed`,
+          token,
+        ),
+      );
     case 'vatTypes':
       return unwrap(await ficFetch(`/c/${data.companyId}/info/vat_types`, token));
     case 'paymentMethods':

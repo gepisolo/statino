@@ -421,6 +421,10 @@ const aggregations = Object.entries(AGGREGATION_LABELS) as [FicAggregation, stri
             placeholder="Operazione non soggetta a IVA ai sensi dell'art. 1, commi 54-89, L. 190/2014…"
             :disabled="submitting"
           />
+          <p class="text-xs text-muted-foreground">
+            Gli a capo vengono mantenuti. Il campo accetta anche HTML, quindi puoi usare
+            <code>&lt;strong&gt;…&lt;/strong&gt;</code> per il grassetto.
+          </p>
         </section>
 
         <DialogFooter>

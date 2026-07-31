@@ -26,6 +26,8 @@ if (import.meta.env.DEV && import.meta.env.VITE_FUNCTIONS_EMULATOR === 'true') {
 type FicOp =
   | { op: 'companies'; integrationId?: string; token?: string }
   | { op: 'entities'; integrationId: string; companyId: number }
+  | { op: 'entity'; integrationId: string; companyId: number; entityId: number }
+  | { op: 'document'; integrationId: string; companyId: number; documentId: number }
   | { op: 'vatTypes'; integrationId: string; companyId: number }
   | { op: 'paymentMethods'; integrationId: string; companyId: number }
   | {
@@ -51,6 +53,24 @@ export function ficCompanies(integrationId?: string, token?: string): Promise<Fi
 
 export function ficEntities(integrationId: string, companyId: number): Promise<FicEntity[]> {
   return run<FicEntity[]>({ op: 'entities', integrationId, companyId });
+}
+
+/** Anagrafica completa: senza, il documento esce con il solo nome. */
+export function ficEntity(
+  integrationId: string,
+  companyId: number,
+  entityId: number,
+): Promise<FicEntity> {
+  return run<FicEntity>({ op: 'entity', integrationId, companyId, entityId });
+}
+
+/** Rilettura di un documento creato: serve a verificare, non a dedurre. */
+export function ficDocument(
+  integrationId: string,
+  companyId: number,
+  documentId: number,
+): Promise<Record<string, unknown>> {
+  return run<Record<string, unknown>>({ op: 'document', integrationId, companyId, documentId });
 }
 
 export function ficVatTypes(integrationId: string, companyId: number): Promise<FicVatType[]> {

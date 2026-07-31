@@ -4,7 +4,7 @@ Personal timesheet app ("statino") replacing an Excel sheet: hours logged
 per day, per client, against yearly contracts. Single user (Google login),
 data on Firestore. UI language: Italian.
 
-## Status (2026-07-31, v0.35.1)
+## Status (2026-07-31, v0.36.0)
 
 **Done and deployed** to https://statino-gepisolo.web.app (CI green):
 
@@ -236,6 +236,25 @@ data on Firestore. UI language: Italian.
   (and the Archivio list) show a muted `CalendarCheck` icon top-right
   (next to the client name, aria-label "Riportata a statino") when
   `statinoEntryId` is set — no need to open the dialog to check.
+
+- Full recipient + payment on the FIC document (v0.36.0): the first real
+  invoice came out missing the client's address, VAT number, tax code and
+  codice destinatario, with no bank details and with the notes' line breaks
+  collapsed. Root cause for the first three: **FIC does not resolve the
+  recipient from the id — the `entity` object we send IS the document's
+  snapshot**, so whatever we omit stays blank. Same for `payment_method`,
+  which carries `bank_name`/`bank_iban`/`bank_beneficiary`. All of it already
+  lives in FIC, so nothing is copied into statino (that would be a second
+  copy silently drifting): the dialog reads the anagrafica with a new
+  read-only `entity` op right before building, and picks the payment method
+  out of the list it already fetches. `compact()` drops empty fields so they
+  don't print as blank lines.
+  Notes are **HTML, not text** — verified by adding a read-only `document` op
+  and reading the owner's hand-made June invoice, whose notes contain
+  `<br />` and `<strong>`. `notesToHtml()` converts newlines and leaves the
+  rest intact, so the configured dicitura can carry bold. The `document` op
+  stays useful on its own: it is how you check what was actually created
+  instead of inferring it.
 
 - `entity.name` required by FIC (v0.35.1): creating an invoice failed with
   422 `{"entity.name": ["The entity.name field must not be empty."]}` —

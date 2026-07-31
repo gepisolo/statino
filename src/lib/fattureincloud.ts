@@ -17,9 +17,10 @@ export interface FicItem {
 
 export interface FicIssuedDocument {
   type: 'invoice';
-  // FIC pretende `name` anche quando l'anagrafica è già individuata da `id`:
-  // senza, risponde 422 "The entity.name field must not be empty.".
-  entity: { id: number; name: string };
+  // FIC pretende `name` anche quando l'anagrafica è già individuata da `id`
+  // (senza, risponde 422 "The entity.name field must not be empty.") e non
+  // completa da sé il resto: quello che non passiamo resta vuoto in fattura.
+  entity: FicEntity;
   date: string;
   numeration?: string;
   visible_subject?: string;
@@ -28,7 +29,7 @@ export interface FicIssuedDocument {
   language: { code: 'it' };
   use_gross_prices: false;
   items_list: FicItem[];
-  payment_method?: { id: number };
+  payment_method?: FicPaymentMethod;
   payments_list?: { due_date: string; amount: number; status: 'not_paid' }[];
   e_invoice: boolean;
   ei_data?: { payment_method: string };
@@ -55,11 +56,23 @@ export interface FicCompany {
   id: number;
   name: string;
 }
+// FIC non ricava i dati del destinatario dall'id: l'oggetto `entity` che
+// mandiamo È la fotografia del destinatario sul documento. Vanno quindi
+// riportati tutti, letti dall'anagrafica al momento della creazione.
 export interface FicEntity {
   id: number;
   name: string;
   vat_number?: string | null;
   tax_code?: string | null;
+  address_street?: string | null;
+  address_postal_code?: string | null;
+  address_city?: string | null;
+  address_province?: string | null;
+  address_extra?: string | null;
+  country?: string | null;
+  email?: string | null;
+  certified_email?: string | null;
+  ei_code?: string | null;
 }
 export interface FicVatType {
   id: number;
@@ -67,9 +80,15 @@ export interface FicVatType {
   description: string;
   notes?: string | null;
 }
+// Stessa storia del destinatario: banca, IBAN e beneficiario finiscono in
+// fattura solo se glieli passiamo insieme all'id.
 export interface FicPaymentMethod {
   id: number;
   name: string;
+  bank_iban?: string | null;
+  bank_name?: string | null;
+  bank_beneficiary?: string | null;
+  ei_payment_method?: string | null;
 }
 
 // FIC non popola `description` sulle aliquote standard (per la 22% è vuota),
@@ -104,6 +123,22 @@ export interface BuildLinesInput {
 
 export function round2(n: number): number {
   return Math.round(n * 100) / 100;
+}
+
+// Il campo note di FIC è HTML, non testo: gli a capo vanno convertiti o si
+// perdono (la fattura compilata a mano da loro contiene infatti `<br />` e
+// `<strong>`). Il resto passa intatto, così restano possibili grassetti e
+// altra formattazione scritta a mano nella configurazione.
+export function notesToHtml(notes: string): string {
+  return notes.replace(/\r?\n/g, '<br />');
+}
+
+// Toglie i campi vuoti prima di spedirli: FIC rifiuta alcuni null e su altri
+// scriverebbe una riga vuota in fattura.
+function compact<T extends object>(o: T): Partial<T> {
+  return Object.fromEntries(
+    Object.entries(o).filter(([, v]) => v !== null && v !== undefined && v !== ''),
+  ) as Partial<T>;
 }
 
 const NO_PROJECT = 'Senza progetto';
@@ -292,15 +327,16 @@ export function computeTotals(lines: BuiltLine[], config: FicConfig): DocumentTo
 
 export interface BuildDocumentInput extends BuildLinesInput {
   config: FicConfig;
-  entityId: number;
-  /** Nome dell'anagrafica FIC: obbligatorio accanto all'id. */
-  entityName: string;
+  /** Anagrafica completa letta da FIC poco prima della creazione. */
+  entity: FicEntity;
+  /** Metodo di pagamento completo, per portarsi dietro banca e IBAN. */
+  paymentMethod: FicPaymentMethod | null;
   /** Data del documento su FIC, chiesta nel dialog (default: oggi). */
   date: string;
 }
 
 export function buildIssuedDocument(input: BuildDocumentInput): FicIssuedDocument {
-  const { config, invoice, entityId, entityName, date } = input;
+  const { config, invoice, entity, paymentMethod, date } = input;
   // Il dialog blocca prima di arrivare qui: se ci arriva lo stesso, meglio
   // fermarsi che emettere una fattura con un'IVA scelta da noi.
   if (config.vatId == null) {
@@ -312,7 +348,7 @@ export function buildIssuedDocument(input: BuildDocumentInput): FicIssuedDocumen
 
   const doc: FicIssuedDocument = {
     type: 'invoice',
-    entity: { id: entityId, name: entityName },
+    entity: compact(entity) as FicEntity,
     date,
     currency: { id: 'EUR' },
     language: { code: 'it' },
@@ -334,11 +370,11 @@ export function buildIssuedDocument(input: BuildDocumentInput): FicIssuedDocumen
   // `number` è deliberatamente assente: il progressivo lo assegna FIC, che
   // è il registro che conta per il fisco.
   if (config.numeration) doc.numeration = config.numeration;
-  if (config.notes) doc.notes = config.notes;
+  if (config.notes) doc.notes = notesToHtml(config.notes);
   if (config.includePeriodSubject) {
     doc.visible_subject = `Periodo dal ${formatDate(invoice.dateFrom)} al ${formatDate(invoice.dateTo)}`;
   }
-  if (config.paymentMethodId) doc.payment_method = { id: config.paymentMethodId };
+  if (paymentMethod) doc.payment_method = compact(paymentMethod) as FicPaymentMethod;
   if (config.eInvoice && config.eiPaymentMethodCode) {
     doc.ei_data = { payment_method: config.eiPaymentMethodCode };
   }

@@ -30,8 +30,15 @@ import {
   buildLines,
   computeTotals,
   round2,
+  type FicEntity,
+  type FicPaymentMethod,
 } from '@/lib/fattureincloud';
-import { ficCreateInvoice, ficErrorMessage } from '@/lib/fattureincloudApi';
+import {
+  ficCreateInvoice,
+  ficEntity,
+  ficErrorMessage,
+  ficPaymentMethods,
+} from '@/lib/fattureincloudApi';
 import { addDays, formatDate, formatEur, formatHours, todayIso } from '@/lib/format';
 import { useAuthStore } from '@/stores/auth';
 import type {
@@ -65,6 +72,10 @@ const loading = ref(false);
 const submitting = ref(false);
 const entries = ref<Entry[]>([]);
 const projects = ref<Project[]>([]);
+// Anagrafica e metodo di pagamento vengono letti da FIC all'apertura: sono
+// dati loro, e copiarli in statino significherebbe farli divergere.
+const entity = ref<FicEntity | null>(null);
+const paymentMethod = ref<FicPaymentMethod | null>(null);
 
 const date = ref(todayIso());
 const aggregation = ref<FicAggregation>('contratto');
@@ -118,6 +129,7 @@ const valid = computed(
     !!mapping.value &&
     !!config.value &&
     config.value.vatId != null &&
+    !!entity.value &&
     /^\d{4}-\d{2}-\d{2}$/.test(date.value) &&
     lines.value.length > 0 &&
     deltaLevel.value !== 'block' &&
@@ -129,6 +141,8 @@ watch(
   async (open) => {
     const invoice = props.invoice;
     if (!open || !invoice) return;
+    entity.value = null;
+    paymentMethod.value = null;
     date.value = todayIso();
     // Con un connettore solo non ha senso far scegliere.
     integrationId.value =
@@ -140,16 +154,29 @@ watch(
     projects.value = [];
     // Senza connettore scelto o senza mappatura non si carica niente: il
     // dialog mostra prima il selettore, poi eventualmente il blocco.
-    if (!integration.value || !mapping.value) return;
+    const conn = integration.value;
+    const cfg = config.value;
+    const map = mapping.value;
+    if (!conn || !cfg || !map) return;
 
     loading.value = true;
     try {
       // I progetti non sono caricati dalla lista fatture e non devono
-      // esserlo: servono solo qui, poche volte al mese.
-      [entries.value, projects.value] = await Promise.all([
+      // esserlo: servono solo qui, poche volte al mese. Anagrafica e metodo
+      // di pagamento si leggono da FIC adesso, non da una copia locale che
+      // col tempo divergerebbe.
+      const [e, p, ent, methods] = await Promise.all([
         entriesRepo.listByInvoice(auth.uid!, invoice.id),
         projectsRepo.list(auth.uid!),
+        ficEntity(conn.id, cfg.companyId, map.entityId),
+        cfg.paymentMethodId
+          ? ficPaymentMethods(conn.id, cfg.companyId)
+          : Promise.resolve([] as FicPaymentMethod[]),
       ]);
+      entries.value = e;
+      projects.value = p;
+      entity.value = ent;
+      paymentMethod.value = methods.find((m) => m.id === cfg.paymentMethodId) ?? null;
     } catch (err) {
       toast.error('Impossibile caricare le voci della fattura', {
         description: extractErrorMessage(err),
@@ -164,8 +191,8 @@ async function submit() {
   const invoice = props.invoice;
   const conn = integration.value;
   const cfg = config.value;
-  const entity = mapping.value;
-  if (!valid.value || !invoice || !conn || !cfg || !entity) return;
+  const ent = entity.value;
+  if (!valid.value || !invoice || !conn || !cfg || !ent) return;
 
   submitting.value = true;
   try {
@@ -177,8 +204,8 @@ async function submit() {
       projects: projects.value,
       singleDescription: singleDescription.value,
       config: cfg,
-      entityId: entity.entityId,
-      entityName: entity.entityName,
+      entity: ent,
+      paymentMethod: paymentMethod.value,
       date: date.value,
     });
     const created = await ficCreateInvoice(conn.id, cfg.companyId, document);
