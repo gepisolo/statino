@@ -164,8 +164,8 @@ async function submit() {
   const invoice = props.invoice;
   const conn = integration.value;
   const cfg = config.value;
-  const entityId = mapping.value?.entityId;
-  if (!valid.value || !invoice || !conn || !cfg || !entityId) return;
+  const entity = mapping.value;
+  if (!valid.value || !invoice || !conn || !cfg || !entity) return;
 
   submitting.value = true;
   try {
@@ -177,7 +177,8 @@ async function submit() {
       projects: projects.value,
       singleDescription: singleDescription.value,
       config: cfg,
-      entityId,
+      entityId: entity.entityId,
+      entityName: entity.entityName,
       date: date.value,
     });
     const created = await ficCreateInvoice(conn.id, cfg.companyId, document);

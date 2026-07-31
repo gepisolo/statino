@@ -17,7 +17,9 @@ export interface FicItem {
 
 export interface FicIssuedDocument {
   type: 'invoice';
-  entity: { id: number };
+  // FIC pretende `name` anche quando l'anagrafica è già individuata da `id`:
+  // senza, risponde 422 "The entity.name field must not be empty.".
+  entity: { id: number; name: string };
   date: string;
   numeration?: string;
   visible_subject?: string;
@@ -291,12 +293,14 @@ export function computeTotals(lines: BuiltLine[], config: FicConfig): DocumentTo
 export interface BuildDocumentInput extends BuildLinesInput {
   config: FicConfig;
   entityId: number;
+  /** Nome dell'anagrafica FIC: obbligatorio accanto all'id. */
+  entityName: string;
   /** Data del documento su FIC, chiesta nel dialog (default: oggi). */
   date: string;
 }
 
 export function buildIssuedDocument(input: BuildDocumentInput): FicIssuedDocument {
-  const { config, invoice, entityId, date } = input;
+  const { config, invoice, entityId, entityName, date } = input;
   // Il dialog blocca prima di arrivare qui: se ci arriva lo stesso, meglio
   // fermarsi che emettere una fattura con un'IVA scelta da noi.
   if (config.vatId == null) {
@@ -308,7 +312,7 @@ export function buildIssuedDocument(input: BuildDocumentInput): FicIssuedDocumen
 
   const doc: FicIssuedDocument = {
     type: 'invoice',
-    entity: { id: entityId },
+    entity: { id: entityId, name: entityName },
     date,
     currency: { id: 'EUR' },
     language: { code: 'it' },

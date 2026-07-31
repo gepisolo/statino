@@ -4,7 +4,7 @@ Personal timesheet app ("statino") replacing an Excel sheet: hours logged
 per day, per client, against yearly contracts. Single user (Google login),
 data on Firestore. UI language: Italian.
 
-## Status (2026-07-31, v0.35.0)
+## Status (2026-07-31, v0.35.1)
 
 **Done and deployed** to https://statino-gepisolo.web.app (CI green):
 
@@ -236,6 +236,15 @@ data on Firestore. UI language: Italian.
   (and the Archivio list) show a muted `CalendarCheck` icon top-right
   (next to the client name, aria-label "Riportata a statino") when
   `statinoEntryId` is set — no need to open the dialog to check.
+
+- `entity.name` required by FIC (v0.35.1): creating an invoice failed with
+  422 `{"entity.name": ["The entity.name field must not be empty."]}` —
+  Fatture in Cloud wants the entity **name alongside its id**, even though
+  the id alone identifies it. `buildIssuedDocument` now sends
+  `entity: { id, name }`, the name coming from the client mapping that was
+  already stored. Caught by intercepting `window.fetch` in the live page and
+  reading the callable's response: the `validationResult` passthrough added
+  in v0.33.0 named the offending field, which is exactly what it was for.
 
 - PDF export modes (v0.35.0): "Esporta PDF" became a dropdown with three
   variants, driven by `StatinoPdfInput.mode`. The grid and the per-project
