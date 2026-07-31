@@ -44,7 +44,7 @@ import {
 import { formatDate, formatEur, formatHours } from '@/lib/format';
 import { invoiceRefDate } from '@/lib/stats';
 import { useAuthStore } from '@/stores/auth';
-import type { Client, Contract, FicConfig, Invoice } from '@/types/models';
+import type { Client, Contract, Integration, Invoice } from '@/types/models';
 
 const auth = useAuthStore();
 
@@ -62,14 +62,17 @@ const deleteOpen = ref(false);
 const deleteTarget = ref<Invoice | null>(null);
 const deleteSubmitting = ref(false);
 
-const ficConfig = ref<FicConfig | null>(null);
+const ficIntegrations = ref<Integration[]>([]);
 const ficOpen = ref(false);
 const ficTarget = ref<Invoice | null>(null);
 const unlinkOpen = ref(false);
 const unlinkTarget = ref<Invoice | null>(null);
-// Serve l'azienda, non solo il documento: una config senza companyId è una
-// connessione mai completata.
-const ficEnabled = computed(() => !!ficConfig.value?.companyId);
+// Solo i connettori di fatturazione davvero collegati: uno creato ma senza
+// azienda non può emettere niente.
+const ficConnectors = computed(() =>
+  ficIntegrations.value.filter((i) => i.type === 'fatturazione' && i.config.companyId),
+);
+const ficEnabled = computed(() => ficConnectors.value.length > 0);
 
 const clientNames = computed(() => new Map(clients.value.map((c) => [c.id, c.name])));
 
@@ -86,11 +89,11 @@ const filteredInvoices = computed(() => invoices.value.filter((i) => yearOf(i) =
 
 onMounted(async () => {
   try {
-    [clients.value, contracts.value, invoices.value, ficConfig.value] = await Promise.all([
+    [clients.value, contracts.value, invoices.value, ficIntegrations.value] = await Promise.all([
       clientsRepo.list(auth.uid!),
       contractsRepo.list(auth.uid!),
       invoicesRepo.list(auth.uid!),
-      integrationsRepo.getFic(auth.uid!),
+      integrationsRepo.list(auth.uid!),
     ]);
   } catch (err) {
     toast.error('Impossibile caricare le fatture', { description: extractErrorMessage(err) });
@@ -404,7 +407,7 @@ async function confirmDelete() {
       :invoice="ficTarget"
       :clients="clients"
       :contracts="contracts"
-      :config="ficConfig"
+      :integrations="ficConnectors"
       @created="onFicCreated"
     />
 

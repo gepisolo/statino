@@ -162,13 +162,30 @@ export interface FicClientMapping {
   entityName: string;
 }
 
-// users/{uid}/integrations/fattureincloud — doc singolo a id fisso.
-// L'access token NON è qui: sta in integrationSecrets/{uid}, illeggibile dal
-// client. Qui resta solo `tokenHint`, mascherato, per far vedere che c'è.
-// I parametri fiscali sono configurazione e non costanti: il regime può
-// cambiare e i tipi IVA sono id dell'account FIC, non valori universali.
+// Un tipo implica un comportamento (la fatturazione sa creare fatture), un
+// provider implica un'API: sono enum di codice, non testo libero. Il titolo
+// invece lo sceglie l'utente, per distinguere due connettori dello stesso
+// provider (es. due account Fatture in Cloud).
+export type IntegrationType = 'fatturazione';
+export type IntegrationProvider = 'fattureincloud';
+
+// users/{uid}/integrations/{id} — una riga per connettore configurato.
+// `config` diventerà un'unione discriminata su `provider` quando arriverà un
+// secondo provider; con uno solo sarebbe un'astrazione finta.
+export interface Integration {
+  id: string;
+  type: IntegrationType;
+  provider: IntegrationProvider;
+  title: string;
+  config: FicConfig;
+}
+
+// Configurazione di un connettore Fatture in Cloud. L'access token NON è qui:
+// sta in integrationSecrets/{uid}, illeggibile dal client. Qui resta solo
+// `tokenHint`, mascherato, per far vedere che c'è. I parametri fiscali sono
+// configurazione e non costanti: il regime può cambiare e i tipi IVA sono id
+// dell'account FIC, non valori universali.
 export interface FicConfig {
-  id: string; // sempre 'fattureincloud'
   companyId: number;
   companyName: string;
   tokenHint: string;
@@ -200,11 +217,11 @@ export interface FicConfig {
   mappings: FicClientMapping[];
 }
 
-// integrationSecrets/{uid} — collection top-level, scrivibile dall'app ma
-// non leggibile: la forma è dichiarata per chi scrive, l'app non la rilegge.
+// integrationSecrets/{uid} — documento top-level, scrivibile dall'app ma non
+// leggibile. Un campo per integrazione, chiamato `<integrationId>Token`: solo
+// la Cloud Function lo rilegge, con l'Admin SDK.
 export interface IntegrationSecrets {
-  fattureincloudToken: string;
-  updatedAt: string; // YYYY-MM-DD
+  [tokenField: string]: string;
 }
 
 // Esito della creazione su FIC, congelato sulla fattura statino. `provider`
@@ -212,6 +229,10 @@ export interface IntegrationSecrets {
 // aggiungesse un secondo gestionale.
 export interface InvoiceExternalFic {
   provider: 'fattureincloud';
+  // Quale connettore l'ha creata: il titolo è in copia perché
+  // l'integrazione può essere rinominata o eliminata dopo.
+  integrationId: string;
+  integrationTitle: string;
   companyId: number;
   documentId: number;
   number: string; // progressivo assegnato da FIC

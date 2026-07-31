@@ -372,6 +372,35 @@ export function defaultFicConfig(companyId: number, companyName: string): Omit<F
   };
 }
 
+// Codici "ModalitàPagamento" del tracciato FatturaPA: sono dello SdI, non di
+// Fatture in Cloud, che li usa tali e quali in `ei_data.payment_method`.
+// Elencati per non costringere a ricordarli a memoria.
+export const EI_PAYMENT_METHODS: readonly { code: string; label: string }[] = [
+  { code: 'MP05', label: 'Bonifico' },
+  { code: 'MP01', label: 'Contanti' },
+  { code: 'MP02', label: 'Assegno' },
+  { code: 'MP03', label: 'Assegno circolare' },
+  { code: 'MP04', label: 'Contanti presso tesoreria' },
+  { code: 'MP06', label: 'Vaglia cambiario' },
+  { code: 'MP07', label: 'Bollettino bancario' },
+  { code: 'MP08', label: 'Carta di pagamento' },
+  { code: 'MP09', label: 'RID' },
+  { code: 'MP10', label: 'RID utenze' },
+  { code: 'MP11', label: 'RID veloce' },
+  { code: 'MP12', label: 'RIBA' },
+  { code: 'MP13', label: 'MAV' },
+  { code: 'MP14', label: 'Quietanza erario' },
+  { code: 'MP15', label: 'Giroconto su conti di contabilità speciale' },
+  { code: 'MP16', label: 'Domiciliazione bancaria' },
+  { code: 'MP17', label: 'Domiciliazione postale' },
+  { code: 'MP18', label: 'Bollettino di c/c postale' },
+  { code: 'MP19', label: 'SEPA Direct Debit' },
+  { code: 'MP20', label: 'SEPA Direct Debit CORE' },
+  { code: 'MP21', label: 'SEPA Direct Debit B2B' },
+  { code: 'MP22', label: 'Trattenuta su somme già corrisposte' },
+  { code: 'MP23', label: 'PagoPA' },
+];
+
 export const AGGREGATION_LABELS: Record<FicAggregation, string> = {
   unica: 'Voce unica',
   esplose: 'Voci esplose',

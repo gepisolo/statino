@@ -2,8 +2,8 @@ import {
   addDoc,
   collection,
   deleteDoc,
+  deleteField,
   doc,
-  getDoc,
   getDocs,
   limit,
   query,
@@ -20,6 +20,7 @@ import type {
   Entry,
   FicConfig,
   FiscalYear,
+  Integration,
   Invoice,
   InvoiceExternalFic,
   InvoicePayment,
@@ -195,36 +196,59 @@ export const tasksRepo = {
   },
 };
 
-// Fatture in Cloud: un solo documento a id fisso (makeRepo genera id
-// automatici, qui non serve). Il token sta a parte, in una collection
-// top-level che il client può scrivere ma non rileggere.
-const FIC_DOC_ID = 'fattureincloud';
-
+// Connettori verso gestionali esterni: una riga per connettore, così si
+// possono avere due account dello stesso provider. Gli access token stanno
+// a parte, in una collection top-level che il client può scrivere ma non
+// rileggere: un campo per integrazione, chiamato `<integrationId>Token`.
 export const integrationsRepo = {
-  async getFic(uid: string): Promise<FicConfig | null> {
-    const snap = await getDoc(doc(db, 'users', uid, 'integrations', FIC_DOC_ID));
-    return snap.exists() ? ({ id: snap.id, ...snap.data() } as FicConfig) : null;
+  ...makeRepo<Integration>('integrations', (a, b) => a.title.localeCompare(b.title)),
+
+  async list(uid: string): Promise<Integration[]> {
+    const snap = await getDocs(collection(db, 'users', uid, 'integrations'));
+    const out: Integration[] = [];
+    for (const d of snap.docs) {
+      const data = d.data();
+      if (data.type) {
+        out.push({ id: d.id, ...data } as Integration);
+        continue;
+      }
+      // MIGRAZIONE ONE-SHOT (v0.34.0) — eliminabile una volta girata.
+      // Prima esisteva un solo connettore, in un documento a id fisso
+      // `fattureincloud` con i campi della config a livello superiore. Ora
+      // sono righe tipizzate con la config annidata. Il token non si tocca:
+      // il vecchio campo `fattureincloudToken` combacia già con la
+      // convenzione `<integrationId>Token`, visto che l'id del documento
+      // diventa l'id dell'integrazione.
+      const migrated = {
+        type: 'fatturazione' as const,
+        provider: 'fattureincloud' as const,
+        title: (data.companyName as string) || 'Fatture in Cloud',
+        config: data as unknown as FicConfig,
+      };
+      await setDoc(d.ref, migrated);
+      out.push({ id: d.id, ...migrated });
+    }
+    return out.sort((a, b) => a.title.localeCompare(b.title));
   },
-  // ⚠️ setDoc pieno, come `makeRepo.update`: i tre dialog che scrivono qui
-  // (connessione, parametri, mappature) devono passare la config completa
-  // con sopra le sole modifiche, o azzerano quello che non toccano — è lo
-  // stesso inciampo che in v0.32.0 faceva perdere i colori dei progetti.
-  // Accetta anche la config con `id` (il caso `{ ...corrente, ...modifiche }`)
-  // e lo scarta qui, così i chiamanti non devono destrutturarlo via.
-  async saveFic(uid: string, data: Omit<FicConfig, 'id'> & { id?: string }): Promise<FicConfig> {
-    const payload = { ...data };
-    delete payload.id;
-    await setDoc(doc(db, 'users', uid, 'integrations', FIC_DOC_ID), payload);
-    return { id: FIC_DOC_ID, ...payload };
-  },
-  async removeFic(uid: string): Promise<void> {
-    await deleteDoc(doc(db, 'users', uid, 'integrations', FIC_DOC_ID));
-  },
-  async setFicToken(uid: string, token: string): Promise<void> {
-    await setDoc(doc(db, 'integrationSecrets', uid), {
-      fattureincloudToken: token,
-      updatedAt: todayIso(),
+
+  // Elimina il connettore e il suo token nello stesso giro: lasciare un
+  // token orfano in un documento illeggibile sarebbe un rifiuto invisibile.
+  async removeWithToken(uid: string, id: string): Promise<void> {
+    await deleteDoc(doc(db, 'users', uid, 'integrations', id));
+    await updateDoc(doc(db, 'integrationSecrets', uid), {
+      [`${id}Token`]: deleteField(),
+    }).catch(() => {
+      // Il documento dei segreti può non esistere (connettore mai
+      // collegato): non è un errore, non c'è niente da revocare.
     });
+  },
+
+  async setToken(uid: string, integrationId: string, token: string): Promise<void> {
+    await setDoc(
+      doc(db, 'integrationSecrets', uid),
+      { [`${integrationId}Token`]: token, updatedAt: todayIso() },
+      { merge: true },
+    );
   },
 };
 

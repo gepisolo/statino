@@ -17,11 +17,11 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { integrationsRepo, extractErrorMessage } from '@/lib/db';
 import type { FicEntity } from '@/lib/fattureincloud';
 import { useAuthStore } from '@/stores/auth';
-import type { Client, FicConfig } from '@/types/models';
+import type { Client, Integration } from '@/types/models';
 
 const props = defineProps<{
   open: boolean;
-  config: FicConfig | null;
+  integration: Integration | null;
   client: Client | null;
   /** Anagrafiche FIC, caricate e tenute in cache dalla view. */
   entities: FicEntity[];
@@ -30,7 +30,7 @@ const props = defineProps<{
 
 const emit = defineEmits<{
   (e: 'update:open', v: boolean): void;
-  (e: 'saved', c: FicConfig): void;
+  (e: 'saved', i: Integration): void;
 }>();
 
 const auth = useAuthStore();
@@ -56,7 +56,8 @@ watch(
     if (!open) return;
     filter.value = '';
     entityId.value =
-      props.config?.mappings.find((m) => m.clientId === props.client?.id)?.entityId ?? null;
+      props.integration?.config.mappings.find((m) => m.clientId === props.client?.id)?.entityId ??
+      null;
   },
 );
 
@@ -74,10 +75,11 @@ watch(
 );
 
 async function submit() {
-  const c = props.config;
+  const integration = props.integration;
+  const c = integration?.config;
   const client = props.client;
   const entity = props.entities.find((e) => e.id === entityId.value);
-  if (!c || !client || !entity) return;
+  if (!integration || !c || !client || !entity) return;
   submitting.value = true;
   try {
     const mappings = [
@@ -86,7 +88,12 @@ async function submit() {
     ];
     // ⚠️ setDoc pieno: la config parte da quella corrente, cambia solo
     // l'elenco delle mappature.
-    const saved = await integrationsRepo.saveFic(auth.uid!, { ...c, mappings });
+    const saved = await integrationsRepo.update(auth.uid!, integration.id, {
+      type: integration.type,
+      provider: integration.provider,
+      title: integration.title,
+      config: { ...c, mappings },
+    });
     toast.success('Cliente collegato', { description: `${client.name} → ${entity.name}` });
     emit('saved', saved);
     emit('update:open', false);

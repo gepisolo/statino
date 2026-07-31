@@ -33,12 +33,14 @@ const TIMEOUT_MS = 20_000;
 // Anche in firestore.rules e in src/lib/config.ts — tenere i tre allineati.
 const ADMIN_EMAIL = 'gepisolo@gmail.com';
 
+// `integrationId` individua il connettore: i token stanno tutti nello stesso
+// documento, un campo ciascuno, chiamato `<integrationId>Token`.
 type FicOp =
-  | { op: 'companies'; token?: string }
-  | { op: 'entities'; companyId: number }
-  | { op: 'vatTypes'; companyId: number }
-  | { op: 'paymentMethods'; companyId: number }
-  | { op: 'createInvoice'; companyId: number; document: unknown };
+  | { op: 'companies'; integrationId?: string; token?: string }
+  | { op: 'entities'; integrationId: string; companyId: number }
+  | { op: 'vatTypes'; integrationId: string; companyId: number }
+  | { op: 'paymentMethods'; integrationId: string; companyId: number }
+  | { op: 'createInvoice'; integrationId: string; companyId: number; document: unknown };
 
 // Rispecchia `isAllowed()` di firestore.rules: admin, oppure invito presente
 // in allowedUsers con email verificata.
@@ -56,9 +58,9 @@ async function assertAllowed(email: string | undefined, emailVerified: boolean):
   }
 }
 
-async function readToken(uid: string): Promise<string> {
+async function readToken(uid: string, integrationId: string): Promise<string> {
   const snap = await getFirestore().doc(`integrationSecrets/${uid}`).get();
-  const token = snap.get('fattureincloudToken');
+  const token = snap.get(`${integrationId}Token`);
   if (typeof token !== 'string' || !token) {
     throw new HttpsError('failed-precondition', 'Token Fatture in Cloud non configurato.');
   }
@@ -158,9 +160,17 @@ export const fattureincloud = onCall<FicOp>(OPTIONS, async (request) => {
   const data = request.data;
   // Il token inline serve solo a validare un token appena incollato, prima
   // di salvarlo: senza questa deroga una verifica fallita sovrascriverebbe
-  // il token buono già configurato.
-  const token =
-    data.op === 'companies' && data.token ? data.token : await readToken(auth.uid);
+  // il token buono già configurato, e su un connettore nuovo non ce n'è
+  // ancora nessuno da leggere.
+  let token: string;
+  if (data.op === 'companies' && data.token) {
+    token = data.token;
+  } else {
+    if (!data.integrationId) {
+      throw new HttpsError('invalid-argument', 'Connettore non indicato.');
+    }
+    token = await readToken(auth.uid, data.integrationId);
+  }
 
   logger.info('fic request', { op: data.op, uid: auth.uid });
 

@@ -24,11 +24,16 @@ if (import.meta.env.DEV && import.meta.env.VITE_FUNCTIONS_EMULATOR === 'true') {
 }
 
 type FicOp =
-  | { op: 'companies'; token?: string }
-  | { op: 'entities'; companyId: number }
-  | { op: 'vatTypes'; companyId: number }
-  | { op: 'paymentMethods'; companyId: number }
-  | { op: 'createInvoice'; companyId: number; document: FicIssuedDocument };
+  | { op: 'companies'; integrationId?: string; token?: string }
+  | { op: 'entities'; integrationId: string; companyId: number }
+  | { op: 'vatTypes'; integrationId: string; companyId: number }
+  | { op: 'paymentMethods'; integrationId: string; companyId: number }
+  | {
+      op: 'createInvoice';
+      integrationId: string;
+      companyId: number;
+      document: FicIssuedDocument;
+    };
 
 const call = httpsCallable<FicOp, unknown>(functions, 'fattureincloud');
 
@@ -38,28 +43,33 @@ async function run<T>(payload: FicOp): Promise<T> {
 }
 
 /** `token` serve solo a validare un token appena incollato, prima di
- *  salvarlo: senza, una verifica fallita sovrascriverebbe quello buono. */
-export function ficCompanies(token?: string): Promise<FicCompany[]> {
-  return run<FicCompany[]>({ op: 'companies', token });
+ *  salvarlo: senza, una verifica fallita sovrascriverebbe quello buono, e su
+ *  un connettore appena creato non ce n'è ancora uno da leggere. */
+export function ficCompanies(integrationId?: string, token?: string): Promise<FicCompany[]> {
+  return run<FicCompany[]>({ op: 'companies', integrationId, token });
 }
 
-export function ficEntities(companyId: number): Promise<FicEntity[]> {
-  return run<FicEntity[]>({ op: 'entities', companyId });
+export function ficEntities(integrationId: string, companyId: number): Promise<FicEntity[]> {
+  return run<FicEntity[]>({ op: 'entities', integrationId, companyId });
 }
 
-export function ficVatTypes(companyId: number): Promise<FicVatType[]> {
-  return run<FicVatType[]>({ op: 'vatTypes', companyId });
+export function ficVatTypes(integrationId: string, companyId: number): Promise<FicVatType[]> {
+  return run<FicVatType[]>({ op: 'vatTypes', integrationId, companyId });
 }
 
-export function ficPaymentMethods(companyId: number): Promise<FicPaymentMethod[]> {
-  return run<FicPaymentMethod[]>({ op: 'paymentMethods', companyId });
+export function ficPaymentMethods(
+  integrationId: string,
+  companyId: number,
+): Promise<FicPaymentMethod[]> {
+  return run<FicPaymentMethod[]>({ op: 'paymentMethods', integrationId, companyId });
 }
 
 export function ficCreateInvoice(
+  integrationId: string,
   companyId: number,
   document: FicIssuedDocument,
 ): Promise<FicCreatedDocument> {
-  return run<FicCreatedDocument>({ op: 'createInvoice', companyId, document });
+  return run<FicCreatedDocument>({ op: 'createInvoice', integrationId, companyId, document });
 }
 
 interface ValidationDetails {

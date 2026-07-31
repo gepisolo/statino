@@ -24,16 +24,16 @@ import { defaultFicConfig, type FicCompany } from '@/lib/fattureincloud';
 import { ficCompanies, ficErrorMessage } from '@/lib/fattureincloudApi';
 import { todayIso } from '@/lib/format';
 import { useAuthStore } from '@/stores/auth';
-import type { FicConfig } from '@/types/models';
+import type { Integration } from '@/types/models';
 
 const props = defineProps<{
   open: boolean;
-  config: FicConfig | null;
+  integration: Integration | null;
 }>();
 
 const emit = defineEmits<{
   (e: 'update:open', v: boolean): void;
-  (e: 'saved', c: FicConfig): void;
+  (e: 'saved', i: Integration): void;
 }>();
 
 const auth = useAuthStore();
@@ -44,8 +44,10 @@ const companyId = ref('');
 const verifying = ref(false);
 const submitting = ref(false);
 
+// `companyId: 0` = connettore creato ma mai collegato.
+const connected = computed(() => !!props.integration?.config.companyId);
 const title = computed(() =>
-  props.config ? 'Aggiorna il token Fatture in Cloud' : 'Collega Fatture in Cloud',
+  connected.value ? 'Aggiorna il token Fatture in Cloud' : 'Collega Fatture in Cloud',
 );
 // Il token si verifica prima di salvarlo: finché non ha restituito almeno
 // un'azienda non c'è niente da confermare.
@@ -69,14 +71,14 @@ async function verify() {
     // Il token viaggia inline solo per questa verifica e non viene
     // salvato: se fosse sbagliato, scriverlo prima cancellerebbe quello
     // buono già configurato.
-    companies.value = await ficCompanies(value);
+    companies.value = await ficCompanies(props.integration?.id, value);
     if (!companies.value.length) {
       toast.error('Token valido ma nessuna azienda collegata', {
         description: "Controlla i permessi concessi all'app su Fatture in Cloud.",
       });
       return;
     }
-    const previous = companies.value.find((c) => c.id === props.config?.companyId);
+    const previous = companies.value.find((c) => c.id === props.integration?.config.companyId);
     companyId.value = String((previous ?? companies.value[0]).id);
     toast.success('Token valido', {
       description: `${companies.value.length} azienda/e disponibili`,
@@ -94,21 +96,27 @@ function maskToken(v: string): string {
 }
 
 async function submit() {
-  if (!valid.value) return;
+  const integration = props.integration;
+  if (!valid.value || !integration) return;
   const company = companies.value.find((c) => String(c.id) === companyId.value);
   if (!company) return;
   submitting.value = true;
   try {
-    await integrationsRepo.setFicToken(auth.uid!, token.value.trim());
-    // ⚠️ saveFic è un setDoc pieno: la config esistente va riportata tutta,
+    await integrationsRepo.setToken(auth.uid!, integration.id, token.value.trim());
+    // ⚠️ `update` è un setDoc pieno: la config esistente va riportata tutta,
     // o si perdono parametri fiscali e mappature.
-    const base = props.config
-      ? { ...props.config, companyId: company.id, companyName: company.name }
-      : defaultFicConfig(company.id, company.name);
-    const saved = await integrationsRepo.saveFic(auth.uid!, {
-      ...base,
-      tokenHint: maskToken(token.value.trim()),
-      tokenUpdatedAt: todayIso(),
+    const base = connected.value ? integration.config : defaultFicConfig(company.id, company.name);
+    const saved = await integrationsRepo.update(auth.uid!, integration.id, {
+      type: integration.type,
+      provider: integration.provider,
+      title: integration.title,
+      config: {
+        ...base,
+        companyId: company.id,
+        companyName: company.name,
+        tokenHint: maskToken(token.value.trim()),
+        tokenUpdatedAt: todayIso(),
+      },
     });
     toast.success('Fatture in Cloud collegato', { description: company.name });
     emit('saved', saved);

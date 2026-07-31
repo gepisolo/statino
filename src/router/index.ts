@@ -54,6 +54,18 @@ export const router = createRouter({
           component: () => import('@/views/invoices/InvoicesView.vue'),
         },
         {
+          path: 'integrations',
+          name: 'integrations',
+          component: () => import('@/views/integrations/IntegrationsView.vue'),
+        },
+        {
+          path: 'integrations/:id',
+          name: 'integration-detail',
+          // Tiene evidenziato "Integrazioni": il dettaglio si raggiunge da lì.
+          meta: { nav: 'integrations' },
+          component: () => import('@/views/integrations/IntegrationDetailView.vue'),
+        },
+        {
           path: 'stats/months',
           name: 'stats-months',
           component: () => import('@/views/stats/StatsMonthsView.vue'),

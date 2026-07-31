@@ -8,6 +8,7 @@ import {
   Users,
   FileText,
   Receipt,
+  Plug,
   Settings,
   LogOut,
   Menu,
@@ -52,6 +53,7 @@ const nav = computed<(NavLink | NavGroup)[]>(() => [
       { name: 'stats-years', label: 'Per anno', to: '/stats/years' },
     ],
   },
+  { name: 'integrations', label: 'Integrazioni', to: '/integrations', icon: Plug },
   { name: 'settings', label: 'Impostazioni', to: '/settings', icon: Settings },
   ...(auth.isAdmin ? [{ name: 'users', label: 'Utenti', to: '/users', icon: UserPlus }] : []),
 ]);

@@ -1,7 +1,7 @@
 <script setup lang="ts">
-import { computed, onMounted, ref } from 'vue';
+import { onMounted, ref } from 'vue';
 import { toast } from 'vue-sonner';
-import { Link2, Link2Off, MoreHorizontal, Pencil, Plus, Trash2 } from '@lucide/vue';
+import { MoreHorizontal, Pencil, Plus, Trash2 } from '@lucide/vue';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
@@ -29,29 +29,16 @@ import {
 } from '@/components/ui/dialog';
 import FiscalYearFormDialog from '@/components/settings/FiscalYearFormDialog.vue';
 import TaxRateFormDialog from '@/components/settings/TaxRateFormDialog.vue';
-import FicConnectionFormDialog from '@/components/settings/FicConnectionFormDialog.vue';
-import FicSettingsFormDialog from '@/components/settings/FicSettingsFormDialog.vue';
-import FicClientMappingFormDialog from '@/components/settings/FicClientMappingFormDialog.vue';
-import {
-  clientsRepo,
-  fiscalYearsRepo,
-  integrationsRepo,
-  taxRatesRepo,
-  extractErrorMessage,
-} from '@/lib/db';
-import { AGGREGATION_LABELS, type FicEntity } from '@/lib/fattureincloud';
-import { ficEntities, ficErrorMessage } from '@/lib/fattureincloudApi';
-import { formatDate, formatEur, formatHours } from '@/lib/format';
+import { fiscalYearsRepo, taxRatesRepo, extractErrorMessage } from '@/lib/db';
+import { formatEur, formatHours } from '@/lib/format';
 import { useAuthStore } from '@/stores/auth';
-import type { Client, FicConfig, FiscalYear, TaxRate } from '@/types/models';
+import type { FiscalYear, TaxRate } from '@/types/models';
 
 const auth = useAuthStore();
 
 const loading = ref(true);
 const fiscalYears = ref<FiscalYear[]>([]);
 const taxRates = ref<TaxRate[]>([]);
-const clients = ref<Client[]>([]);
-const ficConfig = ref<FicConfig | null>(null);
 
 const fiscalFormOpen = ref(false);
 const fiscalFormMode = ref<'create' | 'edit'>('create');
@@ -67,23 +54,11 @@ const deleteRateOpen = ref(false);
 const deleteRateTarget = ref<TaxRate | null>(null);
 const deleteSubmitting = ref(false);
 
-const ficConnectionOpen = ref(false);
-const ficSettingsOpen = ref(false);
-const ficMappingOpen = ref(false);
-const ficMappingTarget = ref<Client | null>(null);
-const ficDisconnectOpen = ref(false);
-// Le anagrafiche FIC restano in cache tra un'apertura e l'altra del dialog:
-// un account può averne centinaia, rileggerle a ogni riga sarebbe sprecato.
-const ficEntityCache = ref<FicEntity[]>([]);
-const ficEntitiesLoading = ref(false);
-
 onMounted(async () => {
   try {
-    [fiscalYears.value, taxRates.value, clients.value, ficConfig.value] = await Promise.all([
+    [fiscalYears.value, taxRates.value] = await Promise.all([
       fiscalYearsRepo.list(auth.uid!),
       taxRatesRepo.list(auth.uid!),
-      clientsRepo.list(auth.uid!),
-      integrationsRepo.getFic(auth.uid!),
     ]);
   } catch (err) {
     toast.error('Impossibile caricare le impostazioni', {
@@ -174,70 +149,6 @@ async function confirmDeleteRate() {
   }
 }
 
-// --- Fatture in Cloud ------------------------------------------------------
-
-const ficMappingOf = computed(
-  () => new Map((ficConfig.value?.mappings ?? []).map((m) => [m.clientId, m])),
-);
-
-function onFicSaved(c: FicConfig) {
-  ficConfig.value = c;
-}
-
-async function openFicMapping(client: Client) {
-  ficMappingTarget.value = client;
-  ficMappingOpen.value = true;
-  if (ficEntityCache.value.length || !ficConfig.value) return;
-  ficEntitiesLoading.value = true;
-  try {
-    ficEntityCache.value = await ficEntities(ficConfig.value.companyId);
-  } catch (err) {
-    toast.error('Impossibile leggere le anagrafiche da Fatture in Cloud', {
-      description: ficErrorMessage(err),
-    });
-  } finally {
-    ficEntitiesLoading.value = false;
-  }
-}
-
-async function removeFicMapping(client: Client) {
-  const c = ficConfig.value;
-  if (!c) return;
-  try {
-    ficConfig.value = await integrationsRepo.saveFic(auth.uid!, {
-      ...c,
-      mappings: c.mappings.filter((m) => m.clientId !== client.id),
-    });
-    toast.success('Collegamento rimosso', { description: client.name });
-  } catch (err) {
-    toast.error('Impossibile rimuovere il collegamento', {
-      description: extractErrorMessage(err),
-    });
-  }
-}
-
-async function confirmFicDisconnect() {
-  deleteSubmitting.value = true;
-  try {
-    await integrationsRepo.removeFic(auth.uid!);
-    // Il token viene svuotato, non cancellato: la regola concede la
-    // scrittura ma non la lettura, quindi non si può nemmeno verificare
-    // che sia sparito — sovrascriverlo con una stringa vuota è l'unico
-    // modo di renderlo inutilizzabile dal server.
-    await integrationsRepo.setFicToken(auth.uid!, '');
-    ficConfig.value = null;
-    ficEntityCache.value = [];
-    toast.success('Fatture in Cloud scollegato', {
-      description: 'Revoca anche il token dalle applicazioni collegate su Fatture in Cloud.',
-    });
-    ficDisconnectOpen.value = false;
-  } catch (err) {
-    toast.error('Impossibile scollegare', { description: extractErrorMessage(err) });
-  } finally {
-    deleteSubmitting.value = false;
-  }
-}
-
 const regimeLabels = { ordinario: 'Ordinario', forfettario: 'Forfettario' } as const;
 const typeLabels = { contributi: 'Contributi', tasse: 'Tasse' } as const;
 </script>
@@ -247,8 +158,7 @@ const typeLabels = { contributi: 'Contributi', tasse: 'Tasse' } as const;
     <div>
       <h1 class="text-2xl font-semibold tracking-tight">Impostazioni</h1>
       <p class="text-sm text-muted-foreground">
-        Dati e aliquote fiscali per anno, usati per i calcoli sul netto, e il collegamento a Fatture
-        in Cloud.
+        Dati e aliquote fiscali per anno, usati per i calcoli sul netto.
       </p>
     </div>
 
@@ -262,7 +172,6 @@ const typeLabels = { contributi: 'Contributi', tasse: 'Tasse' } as const;
       <TabsList>
         <TabsTrigger value="fiscal">Dati fiscali</TabsTrigger>
         <TabsTrigger value="rates">Aliquote fiscali</TabsTrigger>
-        <TabsTrigger value="fic">Fatture in Cloud</TabsTrigger>
       </TabsList>
 
       <TabsContent value="fiscal" class="space-y-4">
@@ -400,175 +309,6 @@ const typeLabels = { contributi: 'Contributi', tasse: 'Tasse' } as const;
           </TableBody>
         </Table>
       </TabsContent>
-
-      <TabsContent value="fic" class="space-y-4">
-        <section class="space-y-3 rounded-md border p-4">
-          <div class="flex flex-wrap items-start justify-between gap-3">
-            <div class="min-w-0">
-              <h3 class="text-sm font-medium">Connessione</h3>
-              <p class="text-sm text-muted-foreground">
-                <template v-if="ficConfig">
-                  {{ ficConfig.companyName }} · token
-                  <span class="font-mono">{{ ficConfig.tokenHint || '—' }}</span>
-                  <template v-if="ficConfig.tokenUpdatedAt">
-                    , aggiornato il {{ formatDate(ficConfig.tokenUpdatedAt) }}
-                  </template>
-                </template>
-                <template v-else>
-                  Nessun collegamento. Serve un access token generato dalle applicazioni collegate
-                  di Fatture in Cloud.
-                </template>
-              </p>
-            </div>
-            <div class="flex gap-2">
-              <Button size="sm" variant="outline" @click="ficConnectionOpen = true">
-                <Link2 class="size-3.5" />
-                {{ ficConfig ? 'Aggiorna token…' : 'Collega…' }}
-              </Button>
-              <Button
-                v-if="ficConfig"
-                size="sm"
-                variant="outline"
-                class="text-destructive"
-                @click="ficDisconnectOpen = true"
-              >
-                <Link2Off class="size-3.5" />
-                Scollega
-              </Button>
-            </div>
-          </div>
-        </section>
-
-        <section class="space-y-3 rounded-md border p-4">
-          <div class="flex flex-wrap items-start justify-between gap-3">
-            <div class="min-w-0">
-              <h3 class="text-sm font-medium">Parametri fattura</h3>
-              <p class="text-sm text-muted-foreground">
-                Applicati a ogni documento creato. Il progressivo lo assegna sempre Fatture in
-                Cloud.
-              </p>
-            </div>
-            <Button
-              size="sm"
-              variant="outline"
-              :disabled="!ficConfig"
-              @click="ficSettingsOpen = true"
-            >
-              <Pencil class="size-3.5" />
-              Modifica…
-            </Button>
-          </div>
-
-          <dl v-if="ficConfig" class="grid gap-x-6 gap-y-2 text-sm sm:grid-cols-2">
-            <div class="flex justify-between gap-4 border-b py-1">
-              <dt class="text-muted-foreground">Numerazione</dt>
-              <dd>{{ ficConfig.numeration || 'predefinita' }}</dd>
-            </div>
-            <div class="flex justify-between gap-4 border-b py-1">
-              <dt class="text-muted-foreground">Tipo IVA</dt>
-              <dd class="truncate">{{ ficConfig.vatDescription || '—' }}</dd>
-            </div>
-            <div class="flex justify-between gap-4 border-b py-1">
-              <dt class="text-muted-foreground">Metodo di pagamento</dt>
-              <dd class="truncate">{{ ficConfig.paymentMethodName || '—' }}</dd>
-            </div>
-            <div class="flex justify-between gap-4 border-b py-1">
-              <dt class="text-muted-foreground">Scadenza</dt>
-              <dd>{{ ficConfig.paymentDueDays }} giorni</dd>
-            </div>
-            <div class="flex justify-between gap-4 border-b py-1">
-              <dt class="text-muted-foreground">Marca da bollo</dt>
-              <dd>
-                <template v-if="ficConfig.stampDuty > 0">
-                  {{ formatEur(ficConfig.stampDuty) }} oltre
-                  {{ formatEur(ficConfig.stampDutyThreshold) }}
-                </template>
-                <template v-else>nessuna</template>
-              </dd>
-            </div>
-            <div class="flex justify-between gap-4 border-b py-1">
-              <dt class="text-muted-foreground">Rivalsa / cassa / ritenuta</dt>
-              <dd class="tabular-nums">
-                {{ formatHours(ficConfig.rivalsa) }}% · {{ formatHours(ficConfig.cassa) }}% ·
-                {{ formatHours(ficConfig.withholdingTax) }}%
-              </dd>
-            </div>
-            <div class="flex justify-between gap-4 border-b py-1">
-              <dt class="text-muted-foreground">Fattura elettronica</dt>
-              <dd>
-                {{ ficConfig.eInvoice ? `sì · ${ficConfig.eiPaymentMethodCode || '—'}` : 'no' }}
-              </dd>
-            </div>
-            <div class="flex justify-between gap-4 border-b py-1">
-              <dt class="text-muted-foreground">Aggregazione predefinita</dt>
-              <dd>{{ AGGREGATION_LABELS[ficConfig.defaultAggregation] }}</dd>
-            </div>
-          </dl>
-        </section>
-
-        <section class="space-y-3 rounded-md border p-4">
-          <div class="min-w-0">
-            <h3 class="text-sm font-medium">Clienti collegati</h3>
-            <p class="text-sm text-muted-foreground">
-              Ogni cliente statino va legato a un'anagrafica di Fatture in Cloud: senza, la fattura
-              non si può creare.
-            </p>
-          </div>
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Cliente</TableHead>
-                <TableHead>Anagrafica Fatture in Cloud</TableHead>
-                <TableHead class="w-12 text-right" />
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              <TableRow v-if="!clients.length">
-                <TableCell colspan="3" class="text-center text-muted-foreground">
-                  Nessun cliente in anagrafica.
-                </TableCell>
-              </TableRow>
-              <TableRow v-for="c in clients" :key="c.id">
-                <TableCell class="font-medium">{{ c.name }}</TableCell>
-                <TableCell>
-                  <template v-if="ficMappingOf.get(c.id)">
-                    {{ ficMappingOf.get(c.id)!.entityName }}
-                  </template>
-                  <span v-else class="text-muted-foreground">Non collegato</span>
-                </TableCell>
-                <TableCell class="text-right">
-                  <DropdownMenu>
-                    <DropdownMenuTrigger as-child>
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        aria-label="Azioni"
-                        :disabled="!ficConfig"
-                      >
-                        <MoreHorizontal class="size-4" />
-                      </Button>
-                    </DropdownMenuTrigger>
-                    <DropdownMenuContent align="end">
-                      <DropdownMenuItem @select="openFicMapping(c)">
-                        <Link2 class="mr-2 size-4" />
-                        {{ ficMappingOf.get(c.id) ? 'Modifica collegamento' : 'Collega…' }}
-                      </DropdownMenuItem>
-                      <DropdownMenuItem
-                        v-if="ficMappingOf.get(c.id)"
-                        class="text-destructive focus:text-destructive"
-                        @select="removeFicMapping(c)"
-                      >
-                        <Link2Off class="mr-2 size-4" />
-                        Rimuovi collegamento
-                      </DropdownMenuItem>
-                    </DropdownMenuContent>
-                  </DropdownMenu>
-                </TableCell>
-              </TableRow>
-            </TableBody>
-          </Table>
-        </section>
-      </TabsContent>
     </Tabs>
 
     <FiscalYearFormDialog
@@ -585,54 +325,6 @@ const typeLabels = { contributi: 'Contributi', tasse: 'Tasse' } as const;
       :tax-rate="rateFormTarget"
       @saved="onRateSaved"
     />
-
-    <FicConnectionFormDialog
-      v-model:open="ficConnectionOpen"
-      :config="ficConfig"
-      @saved="onFicSaved"
-    />
-
-    <FicSettingsFormDialog v-model:open="ficSettingsOpen" :config="ficConfig" @saved="onFicSaved" />
-
-    <FicClientMappingFormDialog
-      v-model:open="ficMappingOpen"
-      :config="ficConfig"
-      :client="ficMappingTarget"
-      :entities="ficEntityCache"
-      :loading-entities="ficEntitiesLoading"
-      @saved="onFicSaved"
-    />
-
-    <Dialog v-model:open="ficDisconnectOpen">
-      <DialogContent class="sm:max-w-md">
-        <DialogHeader>
-          <DialogTitle>Scollegare Fatture in Cloud?</DialogTitle>
-          <DialogDescription>
-            Parametri, mappature e token vengono rimossi da statino. Le fatture già create su
-            Fatture in Cloud restano dove sono. Revoca poi il token dalle applicazioni collegate,
-            sul loro sito.
-          </DialogDescription>
-        </DialogHeader>
-        <DialogFooter>
-          <Button
-            variant="outline"
-            size="sm"
-            :disabled="deleteSubmitting"
-            @click="ficDisconnectOpen = false"
-          >
-            Annulla
-          </Button>
-          <Button
-            variant="destructive"
-            size="sm"
-            :disabled="deleteSubmitting"
-            @click="confirmFicDisconnect"
-          >
-            {{ deleteSubmitting ? 'Scollegamento…' : 'Scollega' }}
-          </Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
 
     <Dialog v-model:open="deleteFiscalOpen">
       <DialogContent class="sm:max-w-md">

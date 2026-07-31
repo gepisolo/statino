@@ -4,7 +4,7 @@ Personal timesheet app ("statino") replacing an Excel sheet: hours logged
 per day, per client, against yearly contracts. Single user (Google login),
 data on Firestore. UI language: Italian.
 
-## Status (2026-07-31, v0.33.1)
+## Status (2026-07-31, v0.34.0)
 
 **Done and deployed** to https://statino-gepisolo.web.app (CI green):
 
@@ -236,6 +236,42 @@ data on Firestore. UI language: Italian.
   (and the Archivio list) show a muted `CalendarCheck` icon top-right
   (next to the client name, aria-label "Riportata a statino") when
   `statinoEntryId` is set — no need to open the dialog to check.
+
+- Integrations section (v0.34.0): the Fatture in Cloud config moved out of
+  Settings into its own "Integrazioni" sidebar entry, and stopped being a
+  singleton. `users/{uid}/integrations/{id}` is now a real collection of
+  `{ type, provider, title, config }` rows, so two connectors of the same
+  provider (two FIC accounts) can coexist. `type` and `provider` are code
+  enums, not free text — a type implies behaviour, a provider implies an API;
+  `lib/integrations.ts` holds the labels and `PROVIDERS_BY_TYPE`. `title` is
+  the user's own label ("Jedisoft"), what distinguishes two identical
+  connectors.
+  - `/integrations` lists them (Tipo | Nome | Titolo | stato); `+` asks type
+    then provider then title and creates the row **disconnected**, landing on
+    `/integrations/:id`, which holds the three sections that used to be the
+    settings tab (connection, invoice parameters, client mapping).
+  - Secrets: `integrationSecrets/{uid}` keeps one field per connector, named
+    `<integrationId>Token`. That naming is why the migration is free — see
+    below. `removeWithToken` deletes both, since a token orphaned inside an
+    unreadable document could never be cleaned up from the UI.
+  - The invoice dialog gained a connector step (skipped when only one is
+    configured) and `Invoice.external` records `integrationId` +
+    `integrationTitle` (a copy, because the connector can be renamed or
+    deleted later).
+  - **One-shot migration inside `integrationsRepo.list`, delete once it has
+    run**: rows without `type` are the old fixed-id `fattureincloud` doc with
+    the config flat at top level, rewritten in place as a typed row with the
+    config nested. The token is untouched: the old doc id becomes the
+    integration id, so the pre-existing `fattureincloudToken` field already
+    matches the `<integrationId>Token` convention.
+  - Also fixed here: the parameters dialog used `Promise.all`, so a 403 on
+    vat types silently blanked the payment methods too — it now uses
+    `allSettled` and prints per-field why a list is empty. Real cause of that
+    403: `/info/vat_types` needs the **`settings:r`** scope on the token,
+    which `/info/payment_methods` apparently does not. And the SdI payment
+    code is a `Select` over the FatturaPA `ModalitàPagamento` table
+    (`EI_PAYMENT_METHODS`) instead of a free-text field — MP05 is a standard
+    SdI code, not something FIC invents, but nobody should have to know that.
 
 - Dialog overflow fix (v0.33.1): every dialog containing a `Textarea` could
   spill its fields, footer and buttons outside the white panel, over the
@@ -498,15 +534,16 @@ npm run format       # prettier --write
   per year, uniqueness enforced in UI; limits € are forfettario-only).
 - `users/{uid}/taxRates` — `{ year, type: 'contributi'|'tasse', name,
   rate, fromIncome, toIncome|null }` (bracket rows, many per year).
-- `users/{uid}/integrations/fattureincloud` — fixed-id doc, the FIC
-  connection: company, masked token hint, invoice parameters (numeration,
-  vat type, payment method + due days, stamp duty + threshold, rivalsa,
-  cassa, withholding, e-invoice flag + SdI payment code, notes, default
-  aggregation) and `mappings[]` statino client → FIC entity.
-- `integrationSecrets/{uid}` — **top-level**, `{ fattureincloudToken,
-  updatedAt }`. Writable by the owner, readable by nobody: only the Cloud
-  Function reads it, with the Admin SDK. See the Firebase section for why
-  it cannot live under `users/{uid}/…`.
+- `users/{uid}/integrations/{id}` — one row per connector:
+  `{ type: 'fatturazione', provider: 'fattureincloud', title, config }`.
+  For FIC, `config` holds company, masked token hint, invoice parameters
+  (numeration, vat type, payment method + due days, stamp duty + threshold,
+  rivalsa, cassa, withholding, e-invoice flag + SdI payment code, notes,
+  default aggregation) and `mappings[]` statino client → FIC entity.
+- `integrationSecrets/{uid}` — **top-level**, one field per connector named
+  `<integrationId>Token`. Writable by the owner, readable by nobody: only the
+  Cloud Function reads it, with the Admin SDK. See the Firebase section for
+  why it cannot live under `users/{uid}/…`.
 
 ## Statino view (the core screen)
 

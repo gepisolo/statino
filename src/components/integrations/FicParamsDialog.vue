@@ -23,20 +23,25 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { Switch } from '@/components/ui/switch';
 import { Textarea } from '@/components/ui/textarea';
 import { integrationsRepo, extractErrorMessage } from '@/lib/db';
-import { AGGREGATION_LABELS, type FicPaymentMethod, type FicVatType } from '@/lib/fattureincloud';
+import {
+  AGGREGATION_LABELS,
+  EI_PAYMENT_METHODS,
+  type FicPaymentMethod,
+  type FicVatType,
+} from '@/lib/fattureincloud';
 import { ficErrorMessage, ficPaymentMethods, ficVatTypes } from '@/lib/fattureincloudApi';
 import { parseDecimal } from '@/lib/format';
 import { useAuthStore } from '@/stores/auth';
-import type { FicAggregation, FicConfig } from '@/types/models';
+import type { FicAggregation, Integration } from '@/types/models';
 
 const props = defineProps<{
   open: boolean;
-  config: FicConfig | null;
+  integration: Integration | null;
 }>();
 
 const emit = defineEmits<{
   (e: 'update:open', v: boolean): void;
-  (e: 'saved', c: FicConfig): void;
+  (e: 'saved', i: Integration): void;
 }>();
 
 const auth = useAuthStore();
@@ -45,6 +50,10 @@ const loading = ref(false);
 const submitting = ref(false);
 const vatTypes = ref<FicVatType[]>([]);
 const paymentMethods = ref<FicPaymentMethod[]>([]);
+// Perché la lista è vuota: senza distinguere permesso negato da lista
+// realmente vuota, un select vuoto non dice niente e non si sa cosa fare.
+const vatTypesError = ref('');
+const paymentMethodsError = ref('');
 
 const numeration = ref('');
 const vatId = ref('');
@@ -90,8 +99,9 @@ const valid = computed(
 watch(
   () => props.open,
   async (open) => {
-    const c = props.config;
-    if (!open || !c) return;
+    const integration = props.integration;
+    const c = integration?.config;
+    if (!open || !integration || !c) return;
     numeration.value = c.numeration;
     vatId.value = c.vatId ? String(c.vatId) : '';
     paymentMethodId.value = c.paymentMethodId ? String(c.paymentMethodId) : '';
@@ -110,25 +120,34 @@ watch(
 
     // Tipi IVA e metodi di pagamento sono id dell'account FIC, non valori
     // universali: si leggono da loro, e solo all'apertura del dialog.
+    // `allSettled` e non `all`: le due liste dipendono da permessi diversi
+    // sul token, e con `all` un 403 su una svuotava silenziosamente anche
+    // l'altra, rendendo indistinguibili "manca lo scope" e "lista vuota".
     loading.value = true;
-    try {
-      [vatTypes.value, paymentMethods.value] = await Promise.all([
-        ficVatTypes(c.companyId),
-        ficPaymentMethods(c.companyId),
-      ]);
-    } catch (err) {
-      toast.error('Impossibile leggere le impostazioni da Fatture in Cloud', {
-        description: ficErrorMessage(err),
-      });
-    } finally {
-      loading.value = false;
+    vatTypesError.value = '';
+    paymentMethodsError.value = '';
+    const [vat, methods] = await Promise.allSettled([
+      ficVatTypes(integration.id, c.companyId),
+      ficPaymentMethods(integration.id, c.companyId),
+    ]);
+    if (vat.status === 'fulfilled') vatTypes.value = vat.value;
+    else {
+      vatTypes.value = [];
+      vatTypesError.value = ficErrorMessage(vat.reason);
     }
+    if (methods.status === 'fulfilled') paymentMethods.value = methods.value;
+    else {
+      paymentMethods.value = [];
+      paymentMethodsError.value = ficErrorMessage(methods.reason);
+    }
+    loading.value = false;
   },
 );
 
 async function submit() {
-  const c = props.config;
-  if (!valid.value || !c) return;
+  const integration = props.integration;
+  const c = integration?.config;
+  if (!valid.value || !integration || !c) return;
   const vat = vatTypes.value.find((v) => String(v.id) === vatId.value);
   const method = paymentMethods.value.find((m) => String(m.id) === paymentMethodId.value);
   submitting.value = true;
@@ -136,26 +155,31 @@ async function submit() {
     const [rivalsaN, cassaN, withholdingN, withholdingTaxableN] = percents.value;
     // ⚠️ setDoc pieno: si riparte dalla config corrente, così azienda,
     // token hint e mappature restano al loro posto.
-    const saved = await integrationsRepo.saveFic(auth.uid!, {
-      ...c,
-      numeration: numeration.value.trim(),
-      vatId: Number(vatId.value),
-      vatValue: vat?.value ?? 0,
-      vatDescription: vat?.description ?? '',
-      paymentMethodId: method ? method.id : null,
-      paymentMethodName: method?.name ?? '',
-      paymentDueDays: dueDaysNum.value,
-      includePeriodSubject: includePeriodSubject.value,
-      defaultAggregation: defaultAggregation.value,
-      eInvoice: eInvoice.value,
-      eiPaymentMethodCode: eInvoice.value ? eiPaymentMethodCode.value.trim() : '',
-      stampDuty: stampDutyNum.value,
-      stampDutyThreshold: thresholdNum.value,
-      rivalsa: rivalsaN,
-      cassa: cassaN,
-      withholdingTax: withholdingN,
-      withholdingTaxTaxable: withholdingTaxableN,
-      notes: notes.value.trim(),
+    const saved = await integrationsRepo.update(auth.uid!, integration.id, {
+      type: integration.type,
+      provider: integration.provider,
+      title: integration.title,
+      config: {
+        ...c,
+        numeration: numeration.value.trim(),
+        vatId: Number(vatId.value),
+        vatValue: vat?.value ?? 0,
+        vatDescription: vat?.description ?? '',
+        paymentMethodId: method ? method.id : null,
+        paymentMethodName: method?.name ?? '',
+        paymentDueDays: dueDaysNum.value,
+        includePeriodSubject: includePeriodSubject.value,
+        defaultAggregation: defaultAggregation.value,
+        eInvoice: eInvoice.value,
+        eiPaymentMethodCode: eInvoice.value ? eiPaymentMethodCode.value.trim() : '',
+        stampDuty: stampDutyNum.value,
+        stampDutyThreshold: thresholdNum.value,
+        rivalsa: rivalsaN,
+        cassa: cassaN,
+        withholdingTax: withholdingN,
+        withholdingTaxTaxable: withholdingTaxableN,
+        notes: notes.value.trim(),
+      },
     });
     toast.success('Parametri fattura aggiornati');
     emit('saved', saved);
@@ -232,6 +256,12 @@ const aggregations = Object.entries(AGGREGATION_LABELS) as [FicAggregation, stri
                   </SelectItem>
                 </SelectContent>
               </Select>
+              <p v-if="paymentMethodsError" class="text-xs text-destructive">
+                {{ paymentMethodsError }}
+              </p>
+              <p v-else-if="!paymentMethods.length" class="text-xs text-muted-foreground">
+                Nessun metodo configurato su Fatture in Cloud: il campo può restare vuoto.
+              </p>
             </div>
             <div class="space-y-2">
               <Label for="fic-due">Giorni di scadenza</Label>
@@ -266,6 +296,13 @@ const aggregations = Object.entries(AGGREGATION_LABELS) as [FicAggregation, stri
                 </SelectItem>
               </SelectContent>
             </Select>
+            <p v-if="vatTypesError" class="text-xs text-destructive">
+              {{ vatTypesError }} — controlla che il token abbia il permesso di lettura sulle
+              impostazioni, in Applicazioni collegate su Fatture in Cloud.
+            </p>
+            <p v-else-if="!vatTypes.length" class="text-xs text-muted-foreground">
+              Nessun tipo IVA configurato su Fatture in Cloud.
+            </p>
           </div>
           <div class="grid gap-4 sm:grid-cols-2">
             <div class="space-y-2">
@@ -355,19 +392,20 @@ const aggregations = Object.entries(AGGREGATION_LABELS) as [FicAggregation, stri
             Crea il documento come fattura elettronica
           </label>
           <div v-if="eInvoice" class="space-y-2">
-            <Label for="fic-ei-method">Modalità di pagamento (codice SdI)</Label>
-            <Input
-              id="fic-ei-method"
-              v-model="eiPaymentMethodCode"
-              type="text"
-              placeholder="MP05"
-              class="sm:max-w-40"
-              :disabled="submitting"
-              autocomplete="off"
-            />
+            <Label for="fic-ei-method">Modalità di pagamento</Label>
+            <Select v-model="eiPaymentMethodCode" :disabled="submitting">
+              <SelectTrigger id="fic-ei-method" class="w-full">
+                <SelectValue placeholder="Scegli la modalità" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem v-for="m in EI_PAYMENT_METHODS" :key="m.code" :value="m.code">
+                  {{ m.label }} ({{ m.code }})
+                </SelectItem>
+              </SelectContent>
+            </Select>
             <p class="text-xs text-muted-foreground">
-              MP05 bonifico, MP01 contanti, MP08 carta. L'invio allo SdI resta un passo manuale su
-              Fatture in Cloud.
+              Codice del tracciato FatturaPA, richiesto dallo SdI. L'invio allo SdI resta comunque
+              un passo manuale su Fatture in Cloud.
             </p>
           </div>
         </section>

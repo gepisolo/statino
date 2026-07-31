@@ -39,7 +39,7 @@ import type {
   Contract,
   Entry,
   FicAggregation,
-  FicConfig,
+  Integration,
   Invoice,
   Project,
 } from '@/types/models';
@@ -49,7 +49,8 @@ const props = defineProps<{
   invoice: Invoice | null;
   clients: Client[];
   contracts: Contract[];
-  config: FicConfig | null;
+  /** Connettori di fatturazione collegati, già filtrati dalla lista. */
+  integrations: Integration[];
 }>();
 
 const emit = defineEmits<{
@@ -68,10 +69,16 @@ const projects = ref<Project[]>([]);
 const date = ref(todayIso());
 const aggregation = ref<FicAggregation>('contratto');
 const singleDescription = ref('');
+const integrationId = ref('');
+
+const integration = computed(
+  () => props.integrations.find((i) => i.id === integrationId.value) ?? null,
+);
+const config = computed(() => integration.value?.config ?? null);
 
 const client = computed(() => props.clients.find((c) => c.id === props.invoice?.clientId));
 const mapping = computed(() =>
-  props.config?.mappings.find((m) => m.clientId === props.invoice?.clientId),
+  config.value?.mappings.find((m) => m.clientId === props.invoice?.clientId),
 );
 
 const lines = computed(() => {
@@ -86,7 +93,7 @@ const lines = computed(() => {
   });
 });
 
-const totals = computed(() => (props.config ? computeTotals(lines.value, props.config) : null));
+const totals = computed(() => (config.value ? computeTotals(lines.value, config.value) : null));
 
 // Lo scarto tra la somma delle righe e l'importo congelato. Sotto il
 // mezzo euro è arrotondamento fisiologico; sopra i cinque c'è qualcosa di
@@ -102,14 +109,14 @@ const deltaLevel = computed<'ok' | 'warn' | 'block'>(() => {
 });
 
 const dueDate = computed(() =>
-  props.config ? addDays(date.value, props.config.paymentDueDays) : '',
+  config.value ? addDays(date.value, config.value.paymentDueDays) : '',
 );
 
 const valid = computed(
   () =>
     !!props.invoice &&
     !!mapping.value &&
-    !!props.config &&
+    !!config.value &&
     /^\d{4}-\d{2}-\d{2}$/.test(date.value) &&
     lines.value.length > 0 &&
     deltaLevel.value !== 'block' &&
@@ -122,13 +129,17 @@ watch(
     const invoice = props.invoice;
     if (!open || !invoice) return;
     date.value = todayIso();
-    aggregation.value = props.config?.defaultAggregation ?? 'contratto';
+    // Con un connettore solo non ha senso far scegliere.
+    integrationId.value =
+      props.integrations.length === 1 ? props.integrations[0].id : integrationId.value;
+    if (!props.integrations.some((i) => i.id === integrationId.value)) integrationId.value = '';
+    aggregation.value = config.value?.defaultAggregation ?? 'contratto';
     singleDescription.value = `Attività dal ${formatDate(invoice.dateFrom)} al ${formatDate(invoice.dateTo)}`;
     entries.value = [];
     projects.value = [];
-    // Senza mappatura non si carica niente: il dialog mostra solo lo stato
-    // bloccante e il rimando alle impostazioni.
-    if (!mapping.value) return;
+    // Senza connettore scelto o senza mappatura non si carica niente: il
+    // dialog mostra prima il selettore, poi eventualmente il blocco.
+    if (!integration.value || !mapping.value) return;
 
     loading.value = true;
     try {
@@ -150,9 +161,10 @@ watch(
 
 async function submit() {
   const invoice = props.invoice;
-  const config = props.config;
+  const conn = integration.value;
+  const cfg = config.value;
   const entityId = mapping.value?.entityId;
-  if (!valid.value || !invoice || !config || !entityId) return;
+  if (!valid.value || !invoice || !conn || !cfg || !entityId) return;
 
   submitting.value = true;
   try {
@@ -163,14 +175,16 @@ async function submit() {
       contracts: props.contracts,
       projects: projects.value,
       singleDescription: singleDescription.value,
-      config,
+      config: cfg,
       entityId,
       date: date.value,
     });
-    const created = await ficCreateInvoice(config.companyId, document);
+    const created = await ficCreateInvoice(conn.id, cfg.companyId, document);
     const external = {
       provider: 'fattureincloud' as const,
-      companyId: config.companyId,
+      integrationId: conn.id,
+      integrationTitle: conn.title,
+      companyId: cfg.companyId,
       documentId: created.id,
       number: String(created.number ?? ''),
       numeration: created.numeration ?? '',
@@ -217,9 +231,9 @@ async function submit() {
   }
 }
 
-function goToSettings() {
+function goToIntegrations() {
   emit('update:open', false);
-  router.push('/settings');
+  router.push(integration.value ? `/integrations/${integration.value.id}` : '/integrations');
 }
 
 function handleOpenChange(v: boolean) {
@@ -233,8 +247,34 @@ const aggregations = Object.entries(AGGREGATION_LABELS) as [FicAggregation, stri
 <template>
   <Dialog :open="open" @update:open="handleOpenChange">
     <DialogContent class="max-h-[90dvh] overflow-y-auto sm:max-w-2xl">
+      <!-- Prima si sceglie il connettore, poi si guarda se il cliente è mappato. -->
+      <template v-if="integrations.length > 1 && !integration">
+        <DialogHeader>
+          <DialogTitle>Con quale connettore?</DialogTitle>
+          <DialogDescription>
+            Hai più integrazioni di fatturazione: scegli con quale creare il documento.
+          </DialogDescription>
+        </DialogHeader>
+        <div class="space-y-2">
+          <Label for="fic-connector">Connettore</Label>
+          <Select v-model="integrationId">
+            <SelectTrigger id="fic-connector" class="w-full">
+              <SelectValue placeholder="Scegli il connettore" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem v-for="i in integrations" :key="i.id" :value="i.id">
+                {{ i.title }} · {{ i.config.companyName }}
+              </SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+        <DialogFooter>
+          <Button variant="outline" size="sm" @click="handleOpenChange(false)">Annulla</Button>
+        </DialogFooter>
+      </template>
+
       <!-- Senza mappatura non c'è destinatario: si può solo andare a crearla. -->
-      <template v-if="!mapping">
+      <template v-else-if="!mapping">
         <DialogHeader>
           <DialogTitle>Cliente non collegato</DialogTitle>
           <DialogDescription>
@@ -244,7 +284,7 @@ const aggregations = Object.entries(AGGREGATION_LABELS) as [FicAggregation, stri
         </DialogHeader>
         <DialogFooter>
           <Button variant="outline" size="sm" @click="handleOpenChange(false)">Annulla</Button>
-          <Button size="sm" @click="goToSettings">Vai alle impostazioni</Button>
+          <Button size="sm" @click="goToIntegrations">Vai all'integrazione</Button>
         </DialogFooter>
       </template>
 
