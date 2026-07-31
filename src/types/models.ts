@@ -198,7 +198,10 @@ export interface FicConfig {
   includePeriodSubject: boolean; // scrive "Periodo dal … al …" in fattura
   defaultAggregation: FicAggregation;
   // fiscali
-  vatId: number; // id del tipo IVA / natura sull'account FIC
+  // null = non ancora scelto. NON 0: su Fatture in Cloud lo zero è un id
+  // legittimo (l'aliquota 0% del forfettario), quindi non può fare anche da
+  // sentinella di "non configurato".
+  vatId: number | null;
   vatValue: number; // %, in cache: serve a stimare il lordo nel preview
   vatDescription: string; // etichetta, in cache
   eInvoice: boolean;

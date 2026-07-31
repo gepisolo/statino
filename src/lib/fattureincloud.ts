@@ -70,6 +70,14 @@ export interface FicPaymentMethod {
   name: string;
 }
 
+// FIC non popola `description` sulle aliquote standard (per la 22% è vuota),
+// quindi da sola darebbe una voce di menu senza testo: si ripiega sulla
+// percentuale, che è comunque ciò che si cerca scorrendo l'elenco.
+export function vatTypeLabel(v: FicVatType): string {
+  const d = (v.description ?? '').trim();
+  return d ? `${d} (${v.value}%)` : `Aliquota ${v.value}%`;
+}
+
 // --- Righe ----------------------------------------------------------------
 
 export type BuiltLineKind = 'work' | 'discount' | 'rounding';
@@ -289,6 +297,12 @@ export interface BuildDocumentInput extends BuildLinesInput {
 
 export function buildIssuedDocument(input: BuildDocumentInput): FicIssuedDocument {
   const { config, invoice, entityId, date } = input;
+  // Il dialog blocca prima di arrivare qui: se ci arriva lo stesso, meglio
+  // fermarsi che emettere una fattura con un'IVA scelta da noi.
+  if (config.vatId == null) {
+    throw new Error('Tipo IVA non configurato per questo connettore.');
+  }
+  const vatId = config.vatId;
   const lines = buildLines(input);
   const totals = computeTotals(lines, config);
 
@@ -303,7 +317,7 @@ export function buildIssuedDocument(input: BuildDocumentInput): FicIssuedDocumen
       name: l.name,
       qty: l.qty,
       net_price: l.netPrice,
-      vat: { id: config.vatId },
+      vat: { id: vatId },
     })),
     e_invoice: config.eInvoice,
     stamp_duty: totals.stampDuty,
@@ -356,7 +370,7 @@ export function defaultFicConfig(companyId: number, companyName: string): Omit<F
     paymentDueDays: 30,
     includePeriodSubject: true,
     defaultAggregation: 'contratto',
-    vatId: 0,
+    vatId: null,
     vatValue: 0,
     vatDescription: '',
     eInvoice: true,

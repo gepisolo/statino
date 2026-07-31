@@ -4,7 +4,7 @@ Personal timesheet app ("statino") replacing an Excel sheet: hours logged
 per day, per client, against yearly contracts. Single user (Google login),
 data on Firestore. UI language: Italian.
 
-## Status (2026-07-31, v0.34.0)
+## Status (2026-07-31, v0.34.1)
 
 **Done and deployed** to https://statino-gepisolo.web.app (CI green):
 
@@ -236,6 +236,19 @@ data on Firestore. UI language: Italian.
   (and the Archivio list) show a muted `CalendarCheck` icon top-right
   (next to the client name, aria-label "Riportata a statino") when
   `statinoEntryId` is set — no need to open the dialog to check.
+
+- VAT type lost on reopen (v0.34.1): the parameters dialog restored the field
+  with `c.vatId ? String(c.vatId) : ''`, and **on Fatture in Cloud the VAT type
+  with `id: 0` is the ordinary 22% rate** (`1` is 21%, `2` is 20%…). Zero is a
+  legitimate id, so the falsy test read a saved choice as "never chosen": the
+  save was fine, the read threw it away. `FicConfig.vatId` is now
+  `number | null` — null means not chosen, which is what `0` was wrongly doing
+  double duty for — restored with `!= null`, and `buildIssuedDocument` throws
+  rather than invent a VAT id (the invoice dialog blocks first, with a message
+  pointing at the connector). Also: FIC leaves `description` empty on standard
+  rates, so the menu entry rendered as " (22%)" and the detail page showed "—";
+  `vatTypeLabel()` falls back to `Aliquota <value>%` and is what gets cached in
+  `vatDescription`.
 
 - Integrations section (v0.34.0): the Fatture in Cloud config moved out of
   Settings into its own "Integrazioni" sidebar entry, and stopped being a

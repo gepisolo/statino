@@ -117,6 +117,7 @@ const valid = computed(
     !!props.invoice &&
     !!mapping.value &&
     !!config.value &&
+    config.value.vatId != null &&
     /^\d{4}-\d{2}-\d{2}$/.test(date.value) &&
     lines.value.length > 0 &&
     deltaLevel.value !== 'block' &&
@@ -419,7 +420,11 @@ const aggregations = Object.entries(AGGREGATION_LABELS) as [FicAggregation, stri
               </div>
             </dl>
 
-            <p v-if="deltaLevel === 'block'" class="text-sm text-destructive">
+            <p v-if="config && config.vatId == null" class="text-sm text-destructive">
+              Il tipo IVA non è configurato su questo connettore: aprilo dalla pagina Integrazioni e
+              scegli il tipo IVA nei parametri fattura.
+            </p>
+            <p v-else-if="deltaLevel === 'block'" class="text-sm text-destructive">
               Le voci non ricostruiscono l'importo della fattura. Controlla che i contratti delle
               ore fatturate esistano ancora prima di creare il documento.
             </p>

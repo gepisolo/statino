@@ -26,6 +26,7 @@ import { integrationsRepo, extractErrorMessage } from '@/lib/db';
 import {
   AGGREGATION_LABELS,
   EI_PAYMENT_METHODS,
+  vatTypeLabel,
   type FicPaymentMethod,
   type FicVatType,
 } from '@/lib/fattureincloud';
@@ -103,8 +104,9 @@ watch(
     const c = integration?.config;
     if (!open || !integration || !c) return;
     numeration.value = c.numeration;
-    vatId.value = c.vatId ? String(c.vatId) : '';
-    paymentMethodId.value = c.paymentMethodId ? String(c.paymentMethodId) : '';
+    // `!= null` e non un test di verità: l'id 0 è un tipo IVA valido.
+    vatId.value = c.vatId != null ? String(c.vatId) : '';
+    paymentMethodId.value = c.paymentMethodId != null ? String(c.paymentMethodId) : '';
     paymentDueDays.value = c.paymentDueDays;
     includePeriodSubject.value = c.includePeriodSubject;
     defaultAggregation.value = c.defaultAggregation;
@@ -164,7 +166,7 @@ async function submit() {
         numeration: numeration.value.trim(),
         vatId: Number(vatId.value),
         vatValue: vat?.value ?? 0,
-        vatDescription: vat?.description ?? '',
+        vatDescription: vat ? vatTypeLabel(vat) : '',
         paymentMethodId: method ? method.id : null,
         paymentMethodName: method?.name ?? '',
         paymentDueDays: dueDaysNum.value,
@@ -292,7 +294,7 @@ const aggregations = Object.entries(AGGREGATION_LABELS) as [FicAggregation, stri
               </SelectTrigger>
               <SelectContent>
                 <SelectItem v-for="v in vatTypes" :key="v.id" :value="String(v.id)">
-                  {{ v.description }} ({{ v.value }}%)
+                  {{ vatTypeLabel(v) }}
                 </SelectItem>
               </SelectContent>
             </Select>
