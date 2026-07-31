@@ -4,7 +4,7 @@ Personal timesheet app ("statino") replacing an Excel sheet: hours logged
 per day, per client, against yearly contracts. Single user (Google login),
 data on Firestore. UI language: Italian.
 
-## Status (2026-07-31, v0.33.0)
+## Status (2026-07-31, v0.33.1)
 
 **Done and deployed** to https://statino-gepisolo.web.app (CI green):
 
@@ -236,6 +236,21 @@ data on Firestore. UI language: Italian.
   (and the Archivio list) show a muted `CalendarCheck` icon top-right
   (next to the client name, aria-label "Riportata a statino") when
   `statinoEntryId` is set — no need to open the dialog to check.
+
+- Dialog overflow fix (v0.33.1): every dialog containing a `Textarea` could
+  spill its fields, footer and buttons outside the white panel, over the
+  backdrop — seen on the task dialog (a pasted Google Sheets URL) and on the
+  Fatture in Cloud token dialog. Cause: `Textarea` carries
+  `field-sizing-content` (wanted, it grows in height) which also makes it ask
+  for its *content's* width; one space-less string then gives it a huge
+  min-content width, and since `DialogContent` is a `grid` whose children
+  default to `min-width: auto`, the track grew to that width dragging every
+  sibling with it (`max-w-lg` only clamps the panel, not the overflowing
+  tracks). Fix: `[&>*]:min-w-0` on `DialogContent`, so no child can force the
+  track wider — it covers every current and future dialog. **`DialogContent`
+  is a shadcn-vue generated file**: re-running the generator would drop it,
+  and the class is not decorative. The emitted rule is
+  `.\[\&\>\*\]\:min-w-0>*{min-width:0}` in the built CSS.
 
 - Fatture in Cloud integration (v0.33.0): from the invoices ⋯ menu,
   "Crea fattura su Fatture in Cloud…" turns a statino invoice into a real
