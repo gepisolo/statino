@@ -1,7 +1,13 @@
 <script setup lang="ts">
 import { computed, nextTick, onMounted, ref, watch } from 'vue';
 import { toast } from 'vue-sonner';
-import { ExternalLink, FileDown, Lock, Pencil, Plus, Trash2 } from '@lucide/vue';
+import { ChevronDown, ExternalLink, FileDown, Lock, Pencil, Plus, Trash2 } from '@lucide/vue';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -33,7 +39,7 @@ import {
   taxRatesRepo,
   extractErrorMessage,
 } from '@/lib/db';
-import { exportStatinoPdf } from '@/lib/pdf';
+import { exportStatinoPdf, type StatinoPdfMode } from '@/lib/pdf';
 import { badgeClass, badgeStyle } from '@/lib/colors';
 import { computeNet } from '@/lib/tax';
 import {
@@ -474,7 +480,15 @@ function monthProjectTotals(): { name: string; hours: string }[] {
     .map(([name, hours]) => ({ name, hours: formatHours(hours) }));
 }
 
-async function exportPdf() {
+// Suffisso nel nome file: tre varianti dello stesso mese non devono
+// sovrascriversi a vicenda nella cartella dei download.
+const PDF_MODES: { mode: StatinoPdfMode; label: string; suffix: string }[] = [
+  { mode: 'completo', label: 'Statino completo', suffix: '' },
+  { mode: 'statino', label: 'Solo statino', suffix: '-statino' },
+  { mode: 'totali', label: 'Solo totali', suffix: '-totali' },
+];
+
+async function exportPdf(mode: StatinoPdfMode) {
   if (!clientId.value) return;
   exporting.value = true;
   try {
@@ -482,12 +496,14 @@ async function exportPdf() {
       .toLowerCase()
       .replace(/[^a-z0-9]+/g, '-')
       .replace(/^-|-$/g, '');
+    const suffix = PDF_MODES.find((m) => m.mode === mode)?.suffix ?? '';
     await exportStatinoPdf({
+      mode,
       clientName: clientName.value,
       periodLabel: `${monthName(month.value)} ${year.value}`,
       totalHours: formatHours(totalMonthHours.value),
       projectTotals: monthProjectTotals(),
-      fileName: `statino-${slug}-${monthPrefix.value}.pdf`,
+      fileName: `statino-${slug}-${monthPrefix.value}${suffix}.pdf`,
       days: days.value.map((d) => ({
         label: `${d.dayLabel} ${d.weekdayShort}`,
         weekend: d.weekend,
@@ -555,16 +571,24 @@ watch(loading, async (isLoading) => {
             <SelectItem v-for="c in clients" :key="c.id" :value="c.id">{{ c.name }}</SelectItem>
           </SelectContent>
         </Select>
-        <Button
-          v-if="clientId"
-          variant="outline"
-          class="col-span-2 sm:col-span-1"
-          :disabled="loading || exporting"
-          @click="exportPdf"
-        >
-          <FileDown class="size-3.5" />
-          {{ exporting ? 'Esportazione…' : 'Esporta PDF' }}
-        </Button>
+        <DropdownMenu v-if="clientId">
+          <DropdownMenuTrigger as-child>
+            <Button
+              variant="outline"
+              class="col-span-2 sm:col-span-1"
+              :disabled="loading || exporting"
+            >
+              <FileDown class="size-3.5" />
+              {{ exporting ? 'Esportazione…' : 'Esporta PDF' }}
+              <ChevronDown class="size-3.5 opacity-60" />
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end">
+            <DropdownMenuItem v-for="m in PDF_MODES" :key="m.mode" @select="exportPdf(m.mode)">
+              {{ m.label }}
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
       </div>
     </div>
 

@@ -21,7 +21,16 @@ export interface StatinoPdfProjectTotal {
   hours: string;
 }
 
+// Cosa finisce nel PDF. La griglia e il riepilogo per progetto sono i due
+// blocchi indipendenti dell'export: le tre modalità sono le loro
+// combinazioni sensate.
+//   'completo' — griglia + riepilogo per progetto
+//   'statino'  — solo la griglia, che porta già la riga TOTALE
+//   'totali'   — solo il riepilogo, per chi vuole i numeri senza il dettaglio
+export type StatinoPdfMode = 'completo' | 'statino' | 'totali';
+
 export interface StatinoPdfInput {
+  mode: StatinoPdfMode;
   clientName: string;
   periodLabel: string; // "luglio 2026"
   totalHours: string;
@@ -44,6 +53,8 @@ export async function exportStatinoPdf(input: StatinoPdfInput): Promise<void> {
   ]);
 
   const doc = new jsPDF({ unit: 'mm', format: 'a4' });
+  const withGrid = input.mode !== 'totali';
+  const withRecap = input.mode !== 'statino';
 
   doc.setFont('helvetica', 'bold');
   doc.setFontSize(15);
@@ -72,59 +83,64 @@ export async function exportStatinoPdf(input: StatinoPdfInput): Promise<void> {
     });
   }
 
-  autoTable(doc, {
-    startY: 30,
-    theme: 'grid',
-    head: [['Giorno', 'Attività', 'Ore']],
-    body,
-    foot: [['TOTALE', '', input.totalHours]],
-    styles: {
-      font: 'helvetica',
-      fontSize: 8.5,
-      cellPadding: 1.6,
-      lineColor: [225, 225, 225],
-      lineWidth: 0.15,
-      textColor: 30,
-    },
-    headStyles: { fillColor: [242, 242, 242], textColor: 30, fontStyle: 'bold' },
-    footStyles: { fillColor: [242, 242, 242], textColor: 30, fontStyle: 'bold' },
-    columnStyles: {
-      0: { cellWidth: 20 },
-      2: { cellWidth: 14, halign: 'right' },
-    },
-    didParseCell: (data) => {
-      if (data.section === 'body' && rowMeta[data.row.index]?.weekend) {
-        data.cell.styles.fillColor = [255, 241, 242];
-      }
-      if (data.section !== 'body' && data.column.index === 2) {
-        data.cell.styles.halign = 'right';
-      }
-    },
-    didDrawCell: (data) => {
-      if (data.section !== 'body' || data.column.index !== 1) return;
-      const link = rowMeta[data.row.index]?.link;
-      if (link) {
-        doc.link(data.cell.x, data.cell.y, data.cell.width, data.cell.height, { url: link });
-      }
-    },
-  });
+  if (withGrid) {
+    autoTable(doc, {
+      startY: 30,
+      theme: 'grid',
+      head: [['Giorno', 'Attività', 'Ore']],
+      body,
+      foot: [['TOTALE', '', input.totalHours]],
+      styles: {
+        font: 'helvetica',
+        fontSize: 8.5,
+        cellPadding: 1.6,
+        lineColor: [225, 225, 225],
+        lineWidth: 0.15,
+        textColor: 30,
+      },
+      headStyles: { fillColor: [242, 242, 242], textColor: 30, fontStyle: 'bold' },
+      footStyles: { fillColor: [242, 242, 242], textColor: 30, fontStyle: 'bold' },
+      columnStyles: {
+        0: { cellWidth: 20 },
+        2: { cellWidth: 14, halign: 'right' },
+      },
+      didParseCell: (data) => {
+        if (data.section === 'body' && rowMeta[data.row.index]?.weekend) {
+          data.cell.styles.fillColor = [255, 241, 242];
+        }
+        if (data.section !== 'body' && data.column.index === 2) {
+          data.cell.styles.halign = 'right';
+        }
+      },
+      didDrawCell: (data) => {
+        if (data.section !== 'body' || data.column.index !== 1) return;
+        const link = rowMeta[data.row.index]?.link;
+        if (link) {
+          doc.link(data.cell.x, data.cell.y, data.cell.width, data.cell.height, { url: link });
+        }
+      },
+    });
+  }
 
-  // Per-project recap, on its own page when the grid leaves no room.
-  if (input.projectTotals.length) {
+  // Riepilogo per progetto. In modalità 'totali' è l'unico blocco e parte
+  // sotto l'intestazione; altrimenti segue la griglia, e va su una pagina
+  // nuova se lo spazio rimasto non basta.
+  if (withRecap && (input.projectTotals.length || input.mode === 'totali')) {
     const pageHeight = doc.internal.pageSize.getHeight();
-    const gridEnd = (doc as unknown as { lastAutoTable?: { finalY: number } }).lastAutoTable
-      ?.finalY;
+    const gridEnd = withGrid
+      ? (doc as unknown as { lastAutoTable?: { finalY: number } }).lastAutoTable?.finalY
+      : undefined;
     // Title + head + rows + foot, roughly: below that, start a new page.
     const needed = 14 + (input.projectTotals.length + 2) * 6;
-    let y = (gridEnd ?? 30) + 10;
-    if (y + needed > pageHeight - 14) {
+    let y = withGrid ? (gridEnd ?? 30) + 10 : 34;
+    if (withGrid && y + needed > pageHeight - 14) {
       doc.addPage();
       y = 18;
     }
 
     doc.setFont('helvetica', 'bold');
     doc.setFontSize(11);
-    doc.text('Totale per progetto', 14, y);
+    doc.text(input.projectTotals.length ? 'Totale per progetto' : 'Totale ore', 14, y);
 
     autoTable(doc, {
       startY: y + 4,

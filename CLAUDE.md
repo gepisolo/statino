@@ -4,7 +4,7 @@ Personal timesheet app ("statino") replacing an Excel sheet: hours logged
 per day, per client, against yearly contracts. Single user (Google login),
 data on Firestore. UI language: Italian.
 
-## Status (2026-07-31, v0.34.1)
+## Status (2026-07-31, v0.35.0)
 
 **Done and deployed** to https://statino-gepisolo.web.app (CI green):
 
@@ -236,6 +236,19 @@ data on Firestore. UI language: Italian.
   (and the Archivio list) show a muted `CalendarCheck` icon top-right
   (next to the client name, aria-label "Riportata a statino") when
   `statinoEntryId` is set — no need to open the dialog to check.
+
+- PDF export modes (v0.35.0): "Esporta PDF" became a dropdown with three
+  variants, driven by `StatinoPdfInput.mode`. The grid and the per-project
+  recap were already the two independent blocks of the export, so the modes
+  are just their sensible combinations: `completo` (both, as before),
+  `statino` (grid only — it already carries its TOTALE foot row), `totali`
+  (recap only, starting right under the header instead of after the grid).
+  Filenames get a suffix (`-statino`, `-totali`) so the three variants of the
+  same month don't overwrite each other in the downloads folder. Degenerate
+  case handled: `totali` on a month with no project at all still prints the
+  hours total, under "Totale ore" instead of "Totale per progetto". Verified
+  in Node by generating all four and inspecting the output (jsPDF's `save()`
+  writes to disk under Node, which makes this cheap to re-check).
 
 - VAT type lost on reopen (v0.34.1): the parameters dialog restored the field
   with `c.vatId ? String(c.vatId) : ''`, and **on Fatture in Cloud the VAT type
