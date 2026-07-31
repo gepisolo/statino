@@ -31,5 +31,16 @@ service cloud.firestore {
     match /users/{uid}/{document=**} {
       allow read, write: if isAllowed() && request.auth.uid == uid;
     }
+
+    // Token Fatture in Cloud (non scade mai). Scritto dall'app quando lo si
+    // configura, letto SOLO dalla Cloud Function con l'Admin SDK, che le
+    // regole non le applica. Non può stare sotto users/{uid}/…: lì il
+    // wildcard ricorsivo qui sopra concede già la lettura al client e le
+    // regole sono in OR — una regola annidata non può revocare un permesso
+    // già concesso da un'altra.
+    match /integrationSecrets/{uid} {
+      allow write: if isAllowed() && request.auth.uid == uid;
+      allow read: if false;
+    }
   }
 }

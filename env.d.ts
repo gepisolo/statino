@@ -10,6 +10,9 @@ interface ImportMetaEnv {
   // Deployment label rendered in the sidebar footer. Empty / unset
   // falls back to "production" at runtime.
   readonly VITE_APP_ENV: string;
+  // 'true' in dev points the Fatture in Cloud callable at the local
+  // functions emulator (127.0.0.1:5001) instead of the deployed one.
+  readonly VITE_FUNCTIONS_EMULATOR: string;
 }
 
 interface ImportMeta {

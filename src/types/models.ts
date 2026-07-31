@@ -143,4 +143,84 @@ export interface Invoice {
   amount: number;
   discount?: InvoiceDiscount | null;
   payment?: InvoicePayment | null;
+  // Documento creato su un gestionale esterno a partire da questa fattura.
+  // Assente o null = mai creato (anche sui doc precedenti al campo).
+  external?: InvoiceExternalFic | null;
+}
+
+// --- Integrazione Fatture in Cloud -----------------------------------------
+
+// Come le ore della fattura diventano righe del documento FIC.
+export type FicAggregation = 'unica' | 'esplose' | 'contratto' | 'progetto';
+
+// Un cliente statino (solo un nome) legato a un'anagrafica FIC (P.IVA,
+// indirizzo, codice destinatario). `entityName` è una cache per mostrare il
+// collegamento senza interrogare FIC.
+export interface FicClientMapping {
+  clientId: string;
+  entityId: number;
+  entityName: string;
+}
+
+// users/{uid}/integrations/fattureincloud — doc singolo a id fisso.
+// L'access token NON è qui: sta in integrationSecrets/{uid}, illeggibile dal
+// client. Qui resta solo `tokenHint`, mascherato, per far vedere che c'è.
+// I parametri fiscali sono configurazione e non costanti: il regime può
+// cambiare e i tipi IVA sono id dell'account FIC, non valori universali.
+export interface FicConfig {
+  id: string; // sempre 'fattureincloud'
+  companyId: number;
+  companyName: string;
+  tokenHint: string;
+  tokenUpdatedAt: string; // YYYY-MM-DD
+  // documento
+  numeration: string; // '' = sezionale predefinito di FIC
+  paymentMethodId: number | null;
+  paymentMethodName: string;
+  paymentDueDays: number;
+  includePeriodSubject: boolean; // scrive "Periodo dal … al …" in fattura
+  defaultAggregation: FicAggregation;
+  // fiscali
+  vatId: number; // id del tipo IVA / natura sull'account FIC
+  vatValue: number; // %, in cache: serve a stimare il lordo nel preview
+  vatDescription: string; // etichetta, in cache
+  eInvoice: boolean;
+  eiPaymentMethodCode: string; // 'MP05' … ('' se eInvoice è false)
+  // Bollo: FIC ha il solo campo `stamp_duty` e lo somma da sé al totale del
+  // documento — non esiste un flag "addebita al cliente", quindi aggiungere
+  // anche una riga di rivalsa lo conterebbe due volte. Resta fuori dalla
+  // riconciliazione delle righe: alza il totale sopra l'importo congelato.
+  stampDuty: number; // € (0 = nessun bollo)
+  stampDutyThreshold: number; // € di imponibile oltre cui si applica
+  rivalsa: number; // %
+  cassa: number; // %
+  withholdingTax: number; // %
+  withholdingTaxTaxable: number; // % dell'imponibile su cui si applica
+  notes: string; // dicitura di legge / note in fattura
+  mappings: FicClientMapping[];
+}
+
+// integrationSecrets/{uid} — collection top-level, scrivibile dall'app ma
+// non leggibile: la forma è dichiarata per chi scrive, l'app non la rilegge.
+export interface IntegrationSecrets {
+  fattureincloudToken: string;
+  updatedAt: string; // YYYY-MM-DD
+}
+
+// Esito della creazione su FIC, congelato sulla fattura statino. `provider`
+// è il discriminante che eviterebbe una migrazione se un domani si
+// aggiungesse un secondo gestionale.
+export interface InvoiceExternalFic {
+  provider: 'fattureincloud';
+  companyId: number;
+  documentId: number;
+  number: string; // progressivo assegnato da FIC
+  numeration: string;
+  date: string; // YYYY-MM-DD, data del documento FIC
+  amountNet: number;
+  amountVat: number;
+  amountGross: number;
+  url: string | null; // PDF, link temporaneo restituito alla creazione
+  createdAt: string; // YYYY-MM-DD
+  aggregation: FicAggregation;
 }

@@ -73,6 +73,14 @@ export function isoOf(year: number, month: number, day: number): string {
   return [year, String(month).padStart(2, '0'), String(day).padStart(2, '0')].join('-');
 }
 
+// `iso` + `days`, still YYYY-MM-DD. Goes through Date so month and year
+// roll over correctly; local time, like the rest of this file.
+export function addDays(iso: string, days: number): string {
+  const [y, m, d] = iso.split('-').map(Number);
+  const dt = new Date(y, m - 1, d + days);
+  return isoOf(dt.getFullYear(), dt.getMonth() + 1, dt.getDate());
+}
+
 // Today as YYYY-MM-DD in local time.
 export function todayIso(): string {
   const now = new Date();

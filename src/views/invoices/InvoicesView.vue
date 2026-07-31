@@ -3,7 +3,7 @@ import { computed, onMounted, ref } from 'vue';
 import { toast } from 'vue-sonner';
 import { parseDate, type DateValue } from '@internationalized/date';
 import { DatePickerRoot, DatePickerTrigger } from 'reka-ui';
-import { Banknote, MoreHorizontal, Pencil, Plus, Trash2 } from '@lucide/vue';
+import { Pencil, Plus } from '@lucide/vue';
 import { Button } from '@/components/ui/button';
 import { DatePickerPanel } from '@/components/ui/date-picker';
 import {
@@ -23,12 +23,6 @@ import {
   TableRow,
 } from '@/components/ui/table';
 import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from '@/components/ui/dropdown-menu';
-import {
   Dialog,
   DialogContent,
   DialogDescription,
@@ -38,11 +32,19 @@ import {
 } from '@/components/ui/dialog';
 import InvoiceFormDialog from '@/components/invoices/InvoiceFormDialog.vue';
 import InvoicePaymentFormDialog from '@/components/invoices/InvoicePaymentFormDialog.vue';
-import { clientsRepo, contractsRepo, invoicesRepo, extractErrorMessage } from '@/lib/db';
+import InvoiceFicDialog from '@/components/invoices/InvoiceFicDialog.vue';
+import InvoiceActionsMenu from '@/components/invoices/InvoiceActionsMenu.vue';
+import {
+  clientsRepo,
+  contractsRepo,
+  integrationsRepo,
+  invoicesRepo,
+  extractErrorMessage,
+} from '@/lib/db';
 import { formatDate, formatEur, formatHours } from '@/lib/format';
 import { invoiceRefDate } from '@/lib/stats';
 import { useAuthStore } from '@/stores/auth';
-import type { Client, Contract, Invoice } from '@/types/models';
+import type { Client, Contract, FicConfig, Invoice } from '@/types/models';
 
 const auth = useAuthStore();
 
@@ -60,6 +62,15 @@ const deleteOpen = ref(false);
 const deleteTarget = ref<Invoice | null>(null);
 const deleteSubmitting = ref(false);
 
+const ficConfig = ref<FicConfig | null>(null);
+const ficOpen = ref(false);
+const ficTarget = ref<Invoice | null>(null);
+const unlinkOpen = ref(false);
+const unlinkTarget = ref<Invoice | null>(null);
+// Serve l'azienda, non solo il documento: una config senza companyId è una
+// connessione mai completata.
+const ficEnabled = computed(() => !!ficConfig.value?.companyId);
+
 const clientNames = computed(() => new Map(clients.value.map((c) => [c.id, c.name])));
 
 // Filter on the issue date's year (docs without one fall back to the
@@ -75,10 +86,11 @@ const filteredInvoices = computed(() => invoices.value.filter((i) => yearOf(i) =
 
 onMounted(async () => {
   try {
-    [clients.value, contracts.value, invoices.value] = await Promise.all([
+    [clients.value, contracts.value, invoices.value, ficConfig.value] = await Promise.all([
       clientsRepo.list(auth.uid!),
       contractsRepo.list(auth.uid!),
       invoicesRepo.list(auth.uid!),
+      integrationsRepo.getFic(auth.uid!),
     ]);
   } catch (err) {
     toast.error('Impossibile caricare le fatture', { description: extractErrorMessage(err) });
@@ -117,6 +129,39 @@ function openPayment(i: Invoice) {
 
 function onPaymentSaved(i: Invoice) {
   invoices.value = invoices.value.map((x) => (x.id === i.id ? i : x));
+}
+
+function openFic(i: Invoice) {
+  ficTarget.value = i;
+  ficOpen.value = true;
+}
+
+function onFicCreated(i: Invoice) {
+  invoices.value = invoices.value.map((x) => (x.id === i.id ? i : x));
+}
+
+function askUnlink(i: Invoice) {
+  unlinkTarget.value = i;
+  unlinkOpen.value = true;
+}
+
+async function confirmUnlink() {
+  const i = unlinkTarget.value;
+  if (!i) return;
+  deleteSubmitting.value = true;
+  try {
+    await invoicesRepo.setExternal(auth.uid!, i.id, null);
+    invoices.value = invoices.value.map((x) => (x.id === i.id ? { ...x, external: null } : x));
+    toast.success('Fattura scollegata', {
+      description: 'Il documento su Fatture in Cloud resta dov’è.',
+    });
+    unlinkOpen.value = false;
+    unlinkTarget.value = null;
+  } catch (err) {
+    toast.error('Impossibile scollegare', { description: extractErrorMessage(err) });
+  } finally {
+    deleteSubmitting.value = false;
+  }
 }
 
 function askDelete(i: Invoice) {
@@ -188,30 +233,22 @@ async function confirmDelete() {
         <div class="flex items-start justify-between gap-2">
           <div class="min-w-0">
             <div class="font-medium">{{ i.number }}</div>
+            <div v-if="i.external" class="text-xs text-muted-foreground">
+              FIC n. {{ i.external.number }}
+            </div>
             <div class="truncate text-sm text-muted-foreground">
               {{ clientNames.get(i.clientId) ?? '—' }}
             </div>
           </div>
-          <DropdownMenu>
-            <DropdownMenuTrigger as-child>
-              <Button variant="ghost" size="icon" class="-mr-2 -mt-2" aria-label="Azioni">
-                <MoreHorizontal class="size-4" />
-              </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end">
-              <DropdownMenuItem @select="openPayment(i)">
-                <Banknote class="mr-2 size-4" />
-                {{ i.payment ? 'Modifica incasso…' : 'Registra incasso…' }}
-              </DropdownMenuItem>
-              <DropdownMenuItem
-                class="text-destructive focus:text-destructive"
-                @select="askDelete(i)"
-              >
-                <Trash2 class="mr-2 size-4" />
-                Elimina…
-              </DropdownMenuItem>
-            </DropdownMenuContent>
-          </DropdownMenu>
+          <InvoiceActionsMenu
+            :invoice="i"
+            :fic-enabled="ficEnabled"
+            trigger-class="-mr-2 -mt-2"
+            @payment="openPayment(i)"
+            @fic="openFic(i)"
+            @unlink-fic="askUnlink(i)"
+            @delete="askDelete(i)"
+          />
         </div>
         <dl class="mt-3 space-y-1 text-sm">
           <div class="flex justify-between gap-4">
@@ -289,7 +326,12 @@ async function confirmDelete() {
           </TableCell>
         </TableRow>
         <TableRow v-for="i in filteredInvoices" :key="i.id">
-          <TableCell class="font-medium">{{ i.number }}</TableCell>
+          <TableCell class="font-medium">
+            <div>{{ i.number }}</div>
+            <div v-if="i.external" class="text-xs font-normal text-muted-foreground">
+              FIC n. {{ i.external.number }}
+            </div>
+          </TableCell>
           <TableCell class="tabular-nums">
             <template v-if="i.date">{{ formatDate(i.date) }}</template>
             <DatePickerRoot
@@ -331,26 +373,14 @@ async function confirmDelete() {
             <template v-else>—</template>
           </TableCell>
           <TableCell class="text-right">
-            <DropdownMenu>
-              <DropdownMenuTrigger as-child>
-                <Button variant="ghost" size="icon" aria-label="Azioni">
-                  <MoreHorizontal class="size-4" />
-                </Button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="end">
-                <DropdownMenuItem @select="openPayment(i)">
-                  <Banknote class="mr-2 size-4" />
-                  {{ i.payment ? 'Modifica incasso…' : 'Registra incasso…' }}
-                </DropdownMenuItem>
-                <DropdownMenuItem
-                  class="text-destructive focus:text-destructive"
-                  @select="askDelete(i)"
-                >
-                  <Trash2 class="mr-2 size-4" />
-                  Elimina…
-                </DropdownMenuItem>
-              </DropdownMenuContent>
-            </DropdownMenu>
+            <InvoiceActionsMenu
+              :invoice="i"
+              :fic-enabled="ficEnabled"
+              @payment="openPayment(i)"
+              @fic="openFic(i)"
+              @unlink-fic="askUnlink(i)"
+              @delete="askDelete(i)"
+            />
           </TableCell>
         </TableRow>
       </TableBody>
@@ -369,6 +399,42 @@ async function confirmDelete() {
       @saved="onPaymentSaved"
     />
 
+    <InvoiceFicDialog
+      v-model:open="ficOpen"
+      :invoice="ficTarget"
+      :clients="clients"
+      :contracts="contracts"
+      :config="ficConfig"
+      @created="onFicCreated"
+    />
+
+    <Dialog v-model:open="unlinkOpen">
+      <DialogContent class="sm:max-w-md">
+        <DialogHeader>
+          <DialogTitle>Scollegare da Fatture in Cloud?</DialogTitle>
+          <DialogDescription>
+            Statino dimentica il documento n.
+            <span class="font-medium">{{ unlinkTarget?.external?.number }}</span> e la fattura torna
+            creabile. Il documento su Fatture in Cloud non viene toccato: se è sbagliato, eliminalo
+            da lì, altrimenti finiresti con due fatture.
+          </DialogDescription>
+        </DialogHeader>
+        <DialogFooter>
+          <Button
+            variant="outline"
+            size="sm"
+            :disabled="deleteSubmitting"
+            @click="unlinkOpen = false"
+          >
+            Annulla
+          </Button>
+          <Button size="sm" :disabled="deleteSubmitting" @click="confirmUnlink">
+            {{ deleteSubmitting ? 'Scollegamento…' : 'Scollega' }}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+
     <Dialog v-model:open="deleteOpen">
       <DialogContent class="sm:max-w-md">
         <DialogHeader>
@@ -376,6 +442,11 @@ async function confirmDelete() {
           <DialogDescription>
             <span class="font-medium">{{ deleteTarget?.number }}</span> verrà rimossa e le attività
             che aveva bloccato torneranno modificabili nello statino.
+            <template v-if="deleteTarget?.external">
+              Il documento n.
+              <span class="font-medium">{{ deleteTarget.external.number }}</span> su Fatture in
+              Cloud <span class="font-medium">non</span> verrà eliminato.
+            </template>
           </DialogDescription>
         </DialogHeader>
         <DialogFooter>

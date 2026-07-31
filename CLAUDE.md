@@ -4,13 +4,14 @@ Personal timesheet app ("statino") replacing an Excel sheet: hours logged
 per day, per client, against yearly contracts. Single user (Google login),
 data on Firestore. UI language: Italian.
 
-## Status (2026-07-30, v0.32.0)
+## Status (2026-07-31, v0.33.0)
 
 **Done and deployed** to https://statino-gepisolo.web.app (CI green):
 
 - Full setup: Firebase project `statino-gepisolo`, Google sign-in, Firestore
   (eur3) with owner-only + invite-allowlist rules, Hosting, GitHub Actions
-  CI/CD (push to main → deploy; PRs → preview channel).
+  CI/CD (push to main → deploy; PRs → preview channel), plus a single
+  Cloud Function proxying Fatture in Cloud (deployed by hand, see Firebase).
 - Invite-only access (v0.2.0): `allowedUsers/{email}` + admin `/users` page
   + `/unauthorized` screen.
 - Registries (v0.3.0–0.4.0): clients, contracts (client filter, state
@@ -236,6 +237,72 @@ data on Firestore. UI language: Italian.
   (next to the client name, aria-label "Riportata a statino") when
   `statinoEntryId` is set — no need to open the dialog to check.
 
+- Fatture in Cloud integration (v0.33.0): from the invoices ⋯ menu,
+  "Crea fattura su Fatture in Cloud…" turns a statino invoice into a real
+  FIC document. **The reason there is now a backend**: `api-v2.fattureincloud.it`
+  answers the CORS preflight with a bare 204, no `Access-Control-Allow-Origin`,
+  so the browser can never call it — verified by curl, don't re-test it.
+  - `functions/` (new npm package, Node 24, CommonJS, own `tsc` gate):
+    one callable `fattureincloud` in `europe-west1`, `maxInstances: 3`.
+    Not a path proxy — a closed `op` union (`companies` | `entities` |
+    `vatTypes` | `paymentMethods` | `createInvoice`). It gates on
+    `request.auth` + the same allowlist as the rules, then reads the token
+    with the Admin SDK. All response unwrapping lives there (`/user/companies`
+    nests under `data.companies`, entities paginate); status→`HttpsError`
+    mapping too. Logs `{ op, uid }` only, never the token or the body.
+  - ⚠️ **Never import from `firebase-functions/v2`** (the barrel), only from
+    narrow subpaths like `firebase-functions/v2/https`. The barrel eagerly
+    loads every v2 provider, `database` included, which pulls
+    `firebase-admin/lib/database` → `@firebase/database-compat` →
+    `@firebase/app`, absent from the production container. It costs a
+    deploy to find out: the upload succeeds and the Cloud Run revision
+    dies at startup with `Cannot find module '@firebase/app'` /
+    "Container Healthcheck failed". **It does not reproduce locally** —
+    `firebase-admin` resolves a different database entry point here, so
+    `require('lib/index.js')` loads fine on the dev machine. That is also
+    why the function's options sit on `onCall` instead of in a
+    `setGlobalOptions` (which only the barrel exports). To check a change:
+    `node -e "require('./lib/index.js')"` then look for `v2/providers`
+    entries in `require.cache` — only `https` may appear.
+  - Auth is FIC's **Manual Authentication**: the owner registers an app,
+    connects it from the FIC web app and pastes a never-expiring access
+    token. No OAuth, no client_secret.
+  - The token lives in a **top-level** `integrationSecrets/{uid}`, write-only
+    from the browser (`allow read: if false`). It can't sit under
+    `users/{uid}/…`: the recursive wildcard there already grants read and
+    rules are OR-ed, so a nested rule cannot revoke it.
+  - `lib/fattureincloud.ts` is pure (no Firebase import): builds the lines
+    and the document, so the dialog can re-render the preview on every
+    keystroke. `lib/fattureincloudApi.ts` is the only file that knows where
+    the proxy lives — swapping host later touches nothing else.
+  - Four aggregations: `unica` (qty 1 × total), `esplose` (one line per
+    entry, `descrizione (#ticket)`, no date), `contratto`, `progetto`
+    (grouped by project+contract, so a project on two rates splits into
+    two lines named `<progetto> — <attività>` instead of averaging).
+    The discount becomes a negative line (FIC's `discount` is a percentage
+    and can't express euros). Lines reconcile against the frozen
+    `invoice.amount`; a residual adds an "Arrotondamento" line, and the
+    dialog blocks the submit above 5 €.
+  - **Bollo**: FIC has only `stamp_duty` and adds it to the document total
+    by itself — there is no "charged to client" flag, so adding a rivalsa
+    line too would double it. It stays outside the reconciliation.
+  - `payments_list` is only sent when `computeTotals().exact` (rivalsa and
+    cassa both zero, i.e. the owner's forfettario): otherwise the gross
+    can't be derived with certainty and FIC computes the due date itself.
+    After creation the computed gross is compared with `amount_gross` and
+    a mismatch raises a warning toast.
+  - Settings gained a third tab (connection with inline token verification
+    that never persists a bad token, invoice parameters read from FIC, and
+    the statino-client → FIC-entity mapping the dialog requires).
+    `integrationsRepo.saveFic` is a full `setDoc`: all three dialogs spread
+    the current config — same trap as `ProjectsView.toggleActive` in v0.32.0.
+  - `Invoice.external` records the created document; the menu entry is
+    replaced by "Scollega…" and the number shows as `FIC n. X` under the
+    invoice number. The delete confirm warns that the FIC document survives.
+    `InvoiceActionsMenu.vue` was extracted in the same commit — the ⋯ block
+    was duplicated verbatim between the desktop table and the mobile card,
+    and it went from 2 to 5 entries.
+
 - Project badge colors (v0.32.0): a project can carry `bgColor` +
   `textColor` (`#rrggbb`), edited in `ProjectFormDialog` with two
   native color pickers, a live badge preview and 18 ready-made pairs
@@ -302,6 +369,14 @@ The owner now uses the app with real data (registries created by hand,
 2026 backlog imported): it has passed real usage, not just typecheck.
 
 **Not yet done / next**:
+- Fatture in Cloud: sending to the SdI is deliberately out of scope for
+  v1 (`POST …/e_invoice/send` with `options.dry_run` exists) — the
+  document is created and the send stays a manual step on their site.
+  Two things to watch on the first real run: whether FIC accepts the
+  negative `net_price` of the discount line (fallback: recompute it as a
+  percentage on the last work line), and whether `payments_list` matches
+  their `amount_gross`. Also unverified: the deep link to the document on
+  the FIC web app — only the temporary PDF `url` is stored today.
 - Invoices have no edit (delete + recreate is the flow) and entries
   already invoiced are never re-counted by overlapping periods — both
   deliberate choices, revisit only if asked.
@@ -359,6 +434,28 @@ npm run format       # prettier --write
   `FIREBASE_SERVICE_ACCOUNT_STATINO_GEPISOLO` repo secret (created with
   `firebase init hosting:github`). Build reads the committed
   `.env.production` (public web config — not secret).
+- **Cloud Functions** (since v0.33.0, the only one): `functions/`, region
+  `europe-west1`, runtime **nodejs24** (GA; deprecated 2028-04-30 — the
+  full table is in firebase-tools' `runtimes/supported/types.js`), requires
+  the **Blaze** plan. The runtime is declared twice: `firebase.json`
+  `runtime` is what the CLI actually uses (`getRuntimeChoice` returns
+  `runtimeFromConfig || <package.json engines>`, no consistency check),
+  while `functions/package.json` `engines.node` exists so npm stops warning
+  EBADENGINE on the predeploy `npm ci`. Keep them equal — a drift would be
+  silent. **CI does not deploy it** —
+  `action-hosting-deploy@v0` only does hosting, and the service account
+  from `firebase init hosting:github` lacks the roles. Deploy by hand:
+  `npm run functions:deploy` (or `npx firebase-tools deploy --only
+  functions,firestore:rules`). To automate it later the SA needs
+  `cloudfunctions.developer`, `run.admin`, `artifactregistry.writer`,
+  `iam.serviceAccountUser`, `serviceusage.serviceUsageConsumer`, plus an
+  `npm ci --prefix functions` step. `functions/**` is in the eslint
+  ignores (root config is a browser/Vue one; `tsc` is that package's gate)
+  and outside `tsconfig.app.json` — without the ignore, `npm run lint`
+  would walk `functions/lib/**` and `--max-warnings 0` would break CI.
+  Local testing: `npx firebase-tools emulators:start --only functions`
+  plus `VITE_FUNCTIONS_EMULATOR=true` in `.env` (the emulator talks to
+  the real Firestore/Auth, so it reads the real token).
 
 ## Domain model (`src/types/models.ts`)
 
@@ -386,6 +483,15 @@ npm run format       # prettier --write
   per year, uniqueness enforced in UI; limits € are forfettario-only).
 - `users/{uid}/taxRates` — `{ year, type: 'contributi'|'tasse', name,
   rate, fromIncome, toIncome|null }` (bracket rows, many per year).
+- `users/{uid}/integrations/fattureincloud` — fixed-id doc, the FIC
+  connection: company, masked token hint, invoice parameters (numeration,
+  vat type, payment method + due days, stamp duty + threshold, rivalsa,
+  cassa, withholding, e-invoice flag + SdI payment code, notes, default
+  aggregation) and `mappings[]` statino client → FIC entity.
+- `integrationSecrets/{uid}` — **top-level**, `{ fattureincloudToken,
+  updatedAt }`. Writable by the owner, readable by nobody: only the Cloud
+  Function reads it, with the Admin SDK. See the Firebase section for why
+  it cannot live under `users/{uid}/…`.
 
 ## Statino view (the core screen)
 

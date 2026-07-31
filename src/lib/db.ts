@@ -3,6 +3,7 @@ import {
   collection,
   deleteDoc,
   doc,
+  getDoc,
   getDocs,
   limit,
   query,
@@ -12,12 +13,15 @@ import {
   writeBatch,
 } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
+import { todayIso } from '@/lib/format';
 import type {
   Client,
   Contract,
   Entry,
+  FicConfig,
   FiscalYear,
   Invoice,
+  InvoiceExternalFic,
   InvoicePayment,
   Project,
   Task,
@@ -98,6 +102,16 @@ export const entriesRepo = {
   async listYear(uid: string, year: number): Promise<Entry[]> {
     return this.listRange(uid, `${year}-01-01`, `${year}-12-31`);
   },
+  // The entries billed by an invoice: the FIC dialog needs them to build
+  // the document's lines.
+  async listByInvoice(uid: string, invoiceId: string): Promise<Entry[]> {
+    const snap = await getDocs(
+      query(collection(db, 'users', uid, 'entries'), where('invoiceId', '==', invoiceId)),
+    );
+    return snap.docs
+      .map((d) => ({ id: d.id, ...d.data() }) as Entry)
+      .sort((a, b) => a.date.localeCompare(b.date));
+  },
   // Guard for client deletion: any hour logged for the client, in any
   // year, blocks it.
   async existsForClient(uid: string, clientId: string): Promise<boolean> {
@@ -138,6 +152,10 @@ export const invoicesRepo = {
   async setPayment(uid: string, id: string, payment: InvoicePayment | null): Promise<void> {
     await updateDoc(doc(db, 'users', uid, 'invoices', id), { payment });
   },
+  // Links (or unlinks, with null) the document created on Fatture in Cloud.
+  async setExternal(uid: string, id: string, external: InvoiceExternalFic | null): Promise<void> {
+    await updateDoc(doc(db, 'users', uid, 'invoices', id), { external });
+  },
   async removeWithEntries(uid: string, id: string): Promise<void> {
     const snap = await getDocs(
       query(collection(db, 'users', uid, 'entries'), where('invoiceId', '==', id)),
@@ -174,6 +192,39 @@ export const tasksRepo = {
       });
     }
     await batch.commit();
+  },
+};
+
+// Fatture in Cloud: un solo documento a id fisso (makeRepo genera id
+// automatici, qui non serve). Il token sta a parte, in una collection
+// top-level che il client può scrivere ma non rileggere.
+const FIC_DOC_ID = 'fattureincloud';
+
+export const integrationsRepo = {
+  async getFic(uid: string): Promise<FicConfig | null> {
+    const snap = await getDoc(doc(db, 'users', uid, 'integrations', FIC_DOC_ID));
+    return snap.exists() ? ({ id: snap.id, ...snap.data() } as FicConfig) : null;
+  },
+  // ⚠️ setDoc pieno, come `makeRepo.update`: i tre dialog che scrivono qui
+  // (connessione, parametri, mappature) devono passare la config completa
+  // con sopra le sole modifiche, o azzerano quello che non toccano — è lo
+  // stesso inciampo che in v0.32.0 faceva perdere i colori dei progetti.
+  // Accetta anche la config con `id` (il caso `{ ...corrente, ...modifiche }`)
+  // e lo scarta qui, così i chiamanti non devono destrutturarlo via.
+  async saveFic(uid: string, data: Omit<FicConfig, 'id'> & { id?: string }): Promise<FicConfig> {
+    const payload = { ...data };
+    delete payload.id;
+    await setDoc(doc(db, 'users', uid, 'integrations', FIC_DOC_ID), payload);
+    return { id: FIC_DOC_ID, ...payload };
+  },
+  async removeFic(uid: string): Promise<void> {
+    await deleteDoc(doc(db, 'users', uid, 'integrations', FIC_DOC_ID));
+  },
+  async setFicToken(uid: string, token: string): Promise<void> {
+    await setDoc(doc(db, 'integrationSecrets', uid), {
+      fattureincloudToken: token,
+      updatedAt: todayIso(),
+    });
   },
 };
 
