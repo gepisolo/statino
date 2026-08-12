@@ -63,8 +63,7 @@ year. No neighboring product models this situation exactly.
   in the grid open the corresponding task dialog. A statino invoice can
   become a real document on **Fatture in Cloud** (four ways of grouping
   the hours into lines, with a preview that must reconcile with the
-  frozen amount before it can be sent); issuing to the SdI stays a
-  manual step on their site. See CLAUDE.md Status for detail.
+  frozen amount before it can be sent). See CLAUDE.md Status for detail.
 - UI language: **Italian**, always.
 - Firestore + Auth, plus a single Cloud Function that proxies Fatture in
   Cloud (their API sends no CORS headers, so the browser cannot call it);
@@ -73,7 +72,9 @@ year. No neighboring product models this situation exactly.
 - Charts are hand-rolled SVG, ≤3 series, one unit per chart (dataviz
   rules in CLAUDE.md).
 - Deliberate non-features: invoices have no edit (delete + recreate);
-  overlapping invoice periods never re-count already-invoiced entries.
+  overlapping invoice periods never re-count already-invoiced entries;
+  issuing to the SdI will never be built (confirmed 2026-08-12) — statino
+  creates the document on Fatture in Cloud, the owner sends it from there.
 
 ## Brand Commitments
 

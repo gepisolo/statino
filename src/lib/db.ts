@@ -18,7 +18,6 @@ import type {
   Client,
   Contract,
   Entry,
-  FicConfig,
   FiscalYear,
   Integration,
   Invoice,
@@ -202,34 +201,6 @@ export const tasksRepo = {
 // rileggere: un campo per integrazione, chiamato `<integrationId>Token`.
 export const integrationsRepo = {
   ...makeRepo<Integration>('integrations', (a, b) => a.title.localeCompare(b.title)),
-
-  async list(uid: string): Promise<Integration[]> {
-    const snap = await getDocs(collection(db, 'users', uid, 'integrations'));
-    const out: Integration[] = [];
-    for (const d of snap.docs) {
-      const data = d.data();
-      if (data.type) {
-        out.push({ id: d.id, ...data } as Integration);
-        continue;
-      }
-      // MIGRAZIONE ONE-SHOT (v0.34.0) — eliminabile una volta girata.
-      // Prima esisteva un solo connettore, in un documento a id fisso
-      // `fattureincloud` con i campi della config a livello superiore. Ora
-      // sono righe tipizzate con la config annidata. Il token non si tocca:
-      // il vecchio campo `fattureincloudToken` combacia già con la
-      // convenzione `<integrationId>Token`, visto che l'id del documento
-      // diventa l'id dell'integrazione.
-      const migrated = {
-        type: 'fatturazione' as const,
-        provider: 'fattureincloud' as const,
-        title: (data.companyName as string) || 'Fatture in Cloud',
-        config: data as unknown as FicConfig,
-      };
-      await setDoc(d.ref, migrated);
-      out.push({ id: d.id, ...migrated });
-    }
-    return out.sort((a, b) => a.title.localeCompare(b.title));
-  },
 
   // Elimina il connettore e il suo token nello stesso giro: lasciare un
   // token orfano in un documento illeggibile sarebbe un rifiuto invisibile.

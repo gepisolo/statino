@@ -4,7 +4,7 @@ Personal timesheet app ("statino") replacing an Excel sheet: hours logged
 per day, per client, against yearly contracts. Single user (Google login),
 data on Firestore. UI language: Italian.
 
-## Status (2026-07-31, v0.36.0)
+## Status (2026-08-12, v0.37.0)
 
 **Done and deployed** to https://statino-gepisolo.web.app (CI green):
 
@@ -237,6 +237,23 @@ data on Firestore. UI language: Italian.
   (next to the client name, aria-label "Riportata a statino") when
   `statinoEntryId` is set — no need to open the dialog to check.
 
+- Client filter on the tasks board (v0.37.0): "Attività" gained a
+  `Select` in the header ("Tutti i clienti" + one row per client, `'all'`
+  sentinel like `ContractsView`) filtering both the board and the Archivio
+  tab. The filter lives **only in the rendering computeds** (`visible()`,
+  `visibleArchived`): `colList()` stays complete on purpose, because it is
+  what `onDrop` renumbers and what `archive()` takes the top-of-list
+  `order` from — filtering it would rewrite a column's `order` from the
+  visible cards alone and scramble the hidden ones. Dropping while
+  filtered still works: `onDrop` finds the target by id in the *full*
+  list, so the card lands next to it.
+
+- FIC migration removed (v0.37.0): the one-shot migration inside
+  `integrationsRepo.list` (v0.34.0) is gone — verified against production
+  Firestore that `users/{uid}/integrations/fattureincloud` is a typed row
+  (`type: fatturazione`, config nested, no flat leftovers). The repo is
+  back to plain `makeRepo` + `removeWithToken`/`setToken`.
+
 - Full recipient + payment on the FIC document (v0.36.0): the first real
   invoice came out missing the client's address, VAT number, tax code and
   codice destinatario, with no bank details and with the notes' line breaks
@@ -312,12 +329,13 @@ data on Firestore. UI language: Italian.
     configured) and `Invoice.external` records `integrationId` +
     `integrationTitle` (a copy, because the connector can be renamed or
     deleted later).
-  - **One-shot migration inside `integrationsRepo.list`, delete once it has
-    run**: rows without `type` are the old fixed-id `fattureincloud` doc with
-    the config flat at top level, rewritten in place as a typed row with the
-    config nested. The token is untouched: the old doc id becomes the
-    integration id, so the pre-existing `fattureincloudToken` field already
-    matches the `<integrationId>Token` convention.
+  - A one-shot migration inside `integrationsRepo.list` (**removed in
+    v0.37.0, once verified as run**): rows without `type` were the old
+    fixed-id `fattureincloud` doc with the config flat at top level,
+    rewritten in place as a typed row with the config nested. The token was
+    untouched: the old doc id becomes the integration id, so the
+    pre-existing `fattureincloudToken` field already matched the
+    `<integrationId>Token` convention.
   - Also fixed here: the parameters dialog used `Promise.all`, so a 403 on
     vat types silently blanked the payment methods too — it now uses
     `allSettled` and prints per-field why a list is empty. Real cause of that
@@ -474,17 +492,17 @@ The owner now uses the app with real data (registries created by hand,
 2026 backlog imported): it has passed real usage, not just typecheck.
 
 **Not yet done / next**:
-- Fatture in Cloud: sending to the SdI is deliberately out of scope for
-  v1 (`POST …/e_invoice/send` with `options.dry_run` exists) — the
-  document is created and the send stays a manual step on their site.
-  Two things to watch on the first real run: whether FIC accepts the
-  negative `net_price` of the discount line (fallback: recompute it as a
-  percentage on the last work line), and whether `payments_list` matches
-  their `amount_gross`. Also unverified: the deep link to the document on
-  the FIC web app — only the temporary PDF `url` is stored today.
-- Invoices have no edit (delete + recreate is the flow) and entries
-  already invoiced are never re-counted by overlapping periods — both
-  deliberate choices, revisit only if asked.
+- Fatture in Cloud, still unverified on a real document: whether FIC
+  accepts the negative `net_price` of the discount line (fallback:
+  recompute it as a percentage on the last work line), and whether
+  `payments_list` matches their `amount_gross`. Also unverified: the deep
+  link to the document on the FIC web app — only the temporary PDF `url`
+  is stored today.
+- Invoices have no edit (delete + recreate is the flow), entries already
+  invoiced are never re-counted by overlapping periods, and **issuing to
+  the SdI will never be built** (confirmed 2026-08-12): statino creates
+  the document, the send stays a manual step on the FIC site. All three
+  are settled choices, not backlog.
 - No changelog page yet (earsup convention `lib/changelog.ts` +
   `/changelog` route) — versions are bumped but not documented in-app.
 - Possible future items mentioned but not requested yet: CSV/Excel export

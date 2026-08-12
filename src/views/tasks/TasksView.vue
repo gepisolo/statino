@@ -3,6 +3,13 @@ import { computed, onMounted, ref } from 'vue';
 import { toast } from 'vue-sonner';
 import { Archive, CalendarCheck, Plus } from '@lucide/vue';
 import { Button } from '@/components/ui/button';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import TaskFormDialog from '@/components/tasks/TaskFormDialog.vue';
@@ -20,6 +27,10 @@ const clients = ref<Client[]>([]);
 const formOpen = ref(false);
 const formMode = ref<'create' | 'edit'>('create');
 const formTask = ref<Task | null>(null);
+
+// 'all' = nessun filtro. Vive solo nel rendering: le liste che alimentano
+// il drag & drop e l'archiviazione restano complete (vedi `colList`).
+const clientFilter = ref('all');
 
 const clientNames = computed(() => new Map(clients.value.map((c) => [c.id, c.name])));
 
@@ -48,6 +59,10 @@ function columnOf(t: Task): Column | 'archived' {
   return t.status === 'done_ok' || t.status === 'done_ko' ? 'done' : t.status;
 }
 
+// Deliberatamente NON filtrata per cliente: è la lista su cui il drop
+// riscrive gli `order` e da cui l'archiviazione prende il minimo. Filtrarla
+// qui rinumererebbe una colonna a partire dalle sole schede visibili,
+// scombinando l'ordine di quelle nascoste dal filtro.
 function colList(col: Column | 'archived'): Task[] {
   return tasks.value.filter((t) => columnOf(t) === col).sort((a, b) => a.order - b.order);
 }
@@ -57,11 +72,19 @@ const wipTasks = computed(() => colList('wip'));
 const doneTasks = computed(() => colList('done'));
 const archivedTasks = computed(() => colList('archived'));
 
+function visible(list: Task[]): Task[] {
+  return clientFilter.value === 'all'
+    ? list
+    : list.filter((t) => t.clientId === clientFilter.value);
+}
+
 const columns = computed(() => [
-  { key: 'todo' as Column, label: 'TODO', tasks: todoTasks.value },
-  { key: 'wip' as Column, label: 'WIP', tasks: wipTasks.value },
-  { key: 'done' as Column, label: 'Done', tasks: doneTasks.value },
+  { key: 'todo' as Column, label: 'TODO', tasks: visible(todoTasks.value) },
+  { key: 'wip' as Column, label: 'WIP', tasks: visible(wipTasks.value) },
+  { key: 'done' as Column, label: 'Done', tasks: visible(doneTasks.value) },
 ]);
+
+const visibleArchived = computed(() => visible(archivedTasks.value));
 
 function openCreate() {
   formMode.value = 'create';
@@ -218,6 +241,15 @@ function cardClass(t: Task): string {
           dettaglio.
         </p>
       </div>
+      <Select v-model="clientFilter">
+        <SelectTrigger class="w-full sm:w-56" aria-label="Filtra per cliente">
+          <SelectValue placeholder="Tutti i clienti" />
+        </SelectTrigger>
+        <SelectContent>
+          <SelectItem value="all">Tutti i clienti</SelectItem>
+          <SelectItem v-for="c in clients" :key="c.id" :value="c.id">{{ c.name }}</SelectItem>
+        </SelectContent>
+      </Select>
     </div>
 
     <div v-if="loading" class="space-y-2">
@@ -309,13 +341,13 @@ function cardClass(t: Task): string {
       <TabsContent value="old">
         <div class="space-y-2">
           <p
-            v-if="!archivedTasks.length"
+            v-if="!visibleArchived.length"
             class="rounded-lg border border-dashed p-8 text-center text-sm text-muted-foreground"
           >
             Nessuna attività archiviata.
           </p>
           <div
-            v-for="t in archivedTasks"
+            v-for="t in visibleArchived"
             :key="t.id"
             class="cursor-pointer rounded-md border p-2.5 shadow-xs"
             :class="cardClass(t)"
