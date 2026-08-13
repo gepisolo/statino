@@ -4,7 +4,7 @@ Personal timesheet app ("statino") replacing an Excel sheet: hours logged
 per day, per client, against yearly contracts. Single user (Google login),
 data on Firestore. UI language: Italian.
 
-## Status (2026-08-12, v0.37.0)
+## Status (2026-08-13, v0.38.0)
 
 **Done and deployed** to https://statino-gepisolo.web.app (CI green):
 
@@ -236,6 +236,15 @@ data on Firestore. UI language: Italian.
   (and the Archivio list) show a muted `CalendarCheck` icon top-right
   (next to the client name, aria-label "Riportata a statino") when
   `statinoEntryId` is set — no need to open the dialog to check.
+
+- Ore per progetto nella card del cliente (v0.38.0): sotto la riga "Ore"
+  della prima card laterale dello statino, l'elenco delle ore del mese
+  suddivise per progetto (badge colorato del progetto, "Senza progetto"
+  in fondo), dal più grande. L'elenco sparisce quando nessuna attività
+  del mese ha un progetto — ripeterebbe solo il totale. È lo stesso
+  calcolo del recap del PDF: il nuovo computed `monthProjectHours` è la
+  fonte unica e `monthProjectTotals()` (input dell'export) ora si limita
+  a formattarne le ore.
 
 - Client filter on the tasks board (v0.37.0): "Attività" gained a
   `Select` in the header ("Tutti i clienti" + one row per client, `'all'`

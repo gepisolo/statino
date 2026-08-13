@@ -269,6 +269,40 @@ const totalMonthAmount = computed(() =>
   ),
 );
 
+const NO_PROJECT = 'Senza progetto';
+
+// Ore del mese suddivise per progetto, sotto il totale della card del
+// cliente. Come nel recap del PDF: dal più grande, "Senza progetto" in
+// fondo, e niente elenco se nessuna attività del mese ha un progetto
+// (ripeterebbe soltanto il totale).
+interface ProjectHours {
+  key: string;
+  project: Project | null;
+  name: string;
+  hours: number;
+}
+
+const monthProjectHours = computed<ProjectHours[]>(() => {
+  const byProject = new Map<string, number>();
+  let anyProject = false;
+  for (const e of monthEntries.value) {
+    if (e.projectId) anyProject = true;
+    const key = e.projectId ?? '';
+    byProject.set(key, (byProject.get(key) ?? 0) + e.hours);
+  }
+  if (!anyProject) return [];
+  return [...byProject.entries()]
+    .map(([key, hours]) => {
+      const project = key ? (projectById.value.get(key) ?? null) : null;
+      return { key, project, name: key ? (project?.name ?? '—') : NO_PROJECT, hours };
+    })
+    .sort((a, b) => {
+      if (!a.key) return 1;
+      if (!b.key) return -1;
+      return b.hours - a.hours;
+    });
+});
+
 const yearStart = computed(() => `${year.value}-01-01`);
 
 // "Fatturabile": every activity of the year up to the selected month at
@@ -455,29 +489,10 @@ function entryPdfText(e: Entry): string {
 }
 
 // Hours per project for the month, so the client can charge them to its
-// cost centres. Biggest first, unassigned hours last; skipped entirely
-// when no entry of the month carries a project (the recap would just
-// repeat the grand total).
-const NO_PROJECT = 'Senza progetto';
-
+// cost centres: la stessa suddivisione della card laterale, con le ore
+// già formattate (vuota quando nessuna attività del mese ha un progetto).
 function monthProjectTotals(): { name: string; hours: string }[] {
-  const byProject = new Map<string, number>();
-  let anyProject = false;
-  for (const d of days.value) {
-    for (const e of d.entries) {
-      if (e.projectId) anyProject = true;
-      const name = e.projectId ? (projectById.value.get(e.projectId)?.name ?? '—') : NO_PROJECT;
-      byProject.set(name, (byProject.get(name) ?? 0) + e.hours);
-    }
-  }
-  if (!anyProject) return [];
-  return [...byProject.entries()]
-    .sort((a, b) => {
-      if (a[0] === NO_PROJECT) return 1;
-      if (b[0] === NO_PROJECT) return -1;
-      return b[1] - a[1];
-    })
-    .map(([name, hours]) => ({ name, hours: formatHours(hours) }));
+  return monthProjectHours.value.map((p) => ({ name: p.name, hours: formatHours(p.hours) }));
 }
 
 // Suffisso nel nome file: tre varianti dello stesso mese non devono
@@ -757,6 +772,22 @@ watch(loading, async (isLoading) => {
                 {{ formatHours(totalMonthHours) }}
               </span>
             </div>
+            <ul v-if="monthProjectHours.length" class="space-y-1 pb-1 pl-3">
+              <li v-for="p in monthProjectHours" :key="p.key" class="flex items-center gap-2">
+                <span
+                  v-if="p.project"
+                  :class="[badgeClass(p.project), 'min-w-0 truncate']"
+                  :style="badgeStyle(p.project)"
+                  :title="p.name"
+                >
+                  {{ p.name }}
+                </span>
+                <span v-else class="min-w-0 truncate text-xs text-muted-foreground">
+                  {{ p.name }}
+                </span>
+                <span class="ml-auto text-sm tabular-nums">{{ formatHours(p.hours) }}</span>
+              </li>
+            </ul>
             <div class="flex items-baseline justify-between">
               <span class="text-sm text-muted-foreground">Importo</span>
               <span class="text-xl font-semibold tabular-nums">
