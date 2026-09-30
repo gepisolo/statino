@@ -23,11 +23,13 @@ export const router = createRouter({
         {
           path: '',
           name: 'statino',
+          meta: { collab: true },
           component: () => import('@/views/statino/StatinoView.vue'),
         },
         {
           path: 'tasks',
           name: 'tasks',
+          meta: { collab: true },
           component: () => import('@/views/tasks/TasksView.vue'),
         },
         {

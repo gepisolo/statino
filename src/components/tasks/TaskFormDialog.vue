@@ -21,9 +21,9 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import EntryFormDialog from '@/components/statino/EntryFormDialog.vue';
-import { contractsRepo, projectsRepo, tasksRepo, extractErrorMessage } from '@/lib/db';
+import { extractErrorMessage } from '@/lib/db';
 import { parseDecimal, todayIso } from '@/lib/format';
-import { useAuthStore } from '@/stores/auth';
+import { useWorkspaceStore } from '@/stores/workspace';
 import type { Client, Contract, Entry, Project, Task, TaskStatus } from '@/types/models';
 
 const props = defineProps<{
@@ -41,7 +41,9 @@ const emit = defineEmits<{
   (e: 'saved', t: Task): void;
 }>();
 
-const auth = useAuthStore();
+// Attività e statino dello spazio corrente (il proprio o quello di un
+// collaboratore).
+const ws = useWorkspaceStore();
 
 // 'archived' is a select option, not a real status: it maps to the
 // archived flag while the done outcome is kept.
@@ -130,7 +132,15 @@ const statinoProjects = ref<Project[]>([]);
 
 const canSendToStatino = computed(() => {
   const t = props.task;
-  return props.mode === 'edit' && t !== null && isDone(t.status) && !t.statinoEntryId;
+  // Non per l'admin sulla lavagna di un collaboratore: lo statino altrui è
+  // in sola lettura, le ore le riporta chi le ha fatte.
+  return (
+    props.mode === 'edit' &&
+    t !== null &&
+    isDone(t.status) &&
+    !t.statinoEntryId &&
+    !ws.statinoReadOnly
+  );
 });
 
 // Tasks done before `doneAt` existed have no close date: fall back to today.
@@ -146,10 +156,7 @@ async function openStatino() {
   const t = props.task!;
   statinoLoading.value = true;
   try {
-    const [contracts, projects] = await Promise.all([
-      contractsRepo.list(auth.uid!),
-      projectsRepo.list(auth.uid!),
-    ]);
+    const { contracts, projects } = await ws.loadCatalogs();
     const date = statinoDate.value;
     statinoContracts.value = contracts.filter(
       (c) => c.clientId === t.clientId && c.startDate <= date && c.endDate >= date,
@@ -170,7 +177,7 @@ async function openStatino() {
 async function onStatinoSaved(entry: Entry) {
   const t = props.task!;
   try {
-    const saved = await tasksRepo.update(auth.uid!, t.id, {
+    const saved = await ws.tasks.update(ws.key, t.id, {
       num: t.num,
       clientId: t.clientId,
       title: t.title,
@@ -204,7 +211,7 @@ async function submit() {
     };
     let saved: Task;
     if (props.mode === 'create') {
-      saved = await tasksRepo.create(auth.uid!, {
+      saved = await ws.tasks.create(ws.key, {
         ...base,
         num: nextNum.value,
         status: 'todo',
@@ -230,7 +237,7 @@ async function submit() {
       // Entering Done stamps today; leaving it clears the stamp; staying
       // done keeps the original date (null on docs done before the field).
       const doneAt = !isDone(newStatus) ? null : isDone(t.status) ? (t.doneAt ?? null) : todayIso();
-      saved = await tasksRepo.update(auth.uid!, t.id, {
+      saved = await ws.tasks.update(ws.key, t.id, {
         ...base,
         num: t.num,
         status: newStatus,

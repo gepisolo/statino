@@ -4,7 +4,7 @@ Personal timesheet app ("statino") replacing an Excel sheet: hours logged
 per day, per client, against yearly contracts. Single user (Google login),
 data on Firestore. UI language: Italian.
 
-## Status (2026-08-13, v0.38.0)
+## Status (2026-09-30, v0.39.0)
 
 **Done and deployed** to https://statino-gepisolo.web.app (CI green):
 
@@ -236,6 +236,57 @@ data on Firestore. UI language: Italian.
   (and the Archivio list) show a muted `CalendarCheck` icon top-right
   (next to the client name, aria-label "Riportata a statino") when
   `statinoEntryId` is set — no need to open the dialog to check.
+
+- Collaboratori (v0.39.0): un secondo tipo di account, creato dalla
+  pagina Utenti (sezione "Collaboratori": email Google, nome, clienti e
+  per ogni cliente i contratti, switch "Accesso attivo"). Vede solo Statino
+  e Attività (`meta.collab` sulle due rotte + nav ridotta in `AppShell`),
+  sui soli clienti/contratti assegnati, e non crea anagrafiche.
+  - **Dove stanno i dati**: NON sotto `users/{uid}` ma in una collection
+    top-level `collaborators/{email}` (scheda) con `entries` e `tasks`
+    sotto, stessa forma di `Entry`/`Task`. Chiave = email minuscola, come
+    `allowedUsers`: è nota alla creazione, l'uid no (non ha mai fatto login).
+  - **Perché la scheda porta una copia dei clienti**: un contratto contiene
+    `hourlyRate` e `annualHours`, e le regole Firestore non nascondono
+    singoli campi — dare in lettura i contratti veri avrebbe mostrato al
+    collaboratore quanto paga il cliente. `Collaborator.clients[]` è quindi
+    una copia ripulita (nome cliente; attività + date dei contratti scelti;
+    tutti i progetti del cliente) ed è **anche l'elenco dei permessi**: non
+    esiste un campo grants separato. `lib/collaborators.ts` (puro) la
+    costruisce e la riconverte in `Client`/`Contract`/`Project` con tariffa
+    e monte ore a 0.
+  - **Allineamento**: `clientsRepo`/`contractsRepo`/`projectsRepo` sono
+    avvolti in `synced()` (`lib/db.ts`): ogni create/update/remove chiama
+    `syncCollaborators`, che rigenera le copie (solo per l'admin; un errore
+    viene loggato e non fa fallire il salvataggio). Un repo nuovo che tocchi
+    quelle anagrafiche deve passare da lì, o le copie restano vecchie.
+  - **Spazio di lavoro**: `stores/workspace.ts` dice su quali dati lavorano
+    Statino e Attività — `key` (uid oppure email), `entries`/`tasks` (il repo
+    giusto: `makeRepo` ora prende la collection radice, `collabEntriesRepo` e
+    `collabTasksRepo` sono gli stessi repo su `collaborators`),
+    `loadCatalogs()`. `EntryFormDialog` e `TaskFormDialog` scrivono lì, non
+    più su `auth.uid`. Le viste osservano `ws.key` per ricaricare e scartano
+    le risposte arrivate dopo un cambio di spazio.
+  - **Selettore "Collaboratore"** (`CollaboratorSelect.vue`, solo admin e
+    solo se ne esiste almeno uno) in testa a Statino e Attività; la scelta
+    sta nello store, non persistita: a ogni avvio l'admin riparte dai propri
+    dati. Sulla lavagna del collaboratore l'admin crea e modifica le
+    attività; lo statino è in sola lettura (niente +, matita, cestino, FAB,
+    né "A statino" dal dialogo attività) ma esportabile in PDF. Le regole
+    dicono lo stesso: sulle `entries` l'admin ha solo read e delete (il
+    delete serve a `collaboratorsRepo.removeCascade`).
+  - Nello spazio di un collaboratore il pannello laterale mostra solo ore
+    (totale, per progetto, per contratto): niente importi, netto, fatture,
+    monte ore — quei dati lì non esistono.
+  - Ruolo in `auth.role` (`admin` | `user` | `collaborator`), deciso da
+    `checkAllowed()`: admin, poi `allowedUsers`, poi `collaborators`. Un
+    account ha un solo ruolo (il dialogo rifiuta email già usate).
+  - Regole provate sull'emulatore con `@firebase/rules-unit-testing` (34
+    casi: il collaboratore non legge `users/…`, né le schede altrui, né
+    scrive la propria; sospeso o con email non verificata non passa). Java 11
+    basta con `firebase-tools@13`; le versioni nuove vogliono Java 21.
+  - Non fatto, per scelta: le ore del collaboratore non entrano nelle tue
+    fatture né nelle statistiche — sono uno statino a parte.
 
 - Ore per progetto nella card del cliente (v0.38.0): sotto la riga "Ore"
   della prima card laterale dello statino, l'elenco delle ore del mese
@@ -551,6 +602,9 @@ npm run format       # prettier --write
   "Statino Web". Firestore in `eur3`, Google sign-in enabled.
 - `firebase.json` + `firestore.rules` are in the repo; deploy rules with
   the Firebase MCP `firebase_deploy` tool (or `npx firebase-tools deploy`).
+- A collaborator's data is the exception to the line below: it lives in
+  `collaborators/{email}/…` (see the domain model), and a collaborator is
+  NOT in `allowedUsers`, so `users/{uid}/…` stays closed to them.
 - All documents live under `users/{uid}/…`; rules allow access only to the
   owner (`request.auth.uid == uid`) **and** only if the account is invited:
   access requires an `allowedUsers/{email}` doc (lowercase email as ID) or
@@ -621,6 +675,13 @@ npm run format       # prettier --write
   (numeration, vat type, payment method + due days, stamp duty + threshold,
   rivalsa, cassa, withholding, e-invoice flag + SdI payment code, notes,
   default aggregation) and `mappings[]` statino client → FIC entity.
+- `collaborators/{email}` — **top-level**: `{ name, active, createdAt,
+  clients[] }` where each client is `{ id, name, contracts[{ id, activity,
+  startDate, endDate }], projects[{ id, name, active, bgColor, textColor }] }`
+  — a sanitized copy of the admin's registries that doubles as the grant
+  list. Subcollections `entries` and `tasks` (same shapes as the owner's).
+  Readable by the admin and by that collaborator while `active`; the card is
+  written only by the admin.
 - `integrationSecrets/{uid}` — **top-level**, one field per connector named
   `<integrationId>Token`. Writable by the owner, readable by nobody: only the
   Cloud Function reads it, with the Admin SDK. See the Firebase section for

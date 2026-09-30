@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted, ref } from 'vue';
+import { computed, onMounted, ref, watch } from 'vue';
 import { toast } from 'vue-sonner';
 import { Archive, CalendarCheck, Plus } from '@lucide/vue';
 import { Button } from '@/components/ui/button';
@@ -13,12 +13,15 @@ import {
 import { Skeleton } from '@/components/ui/skeleton';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import TaskFormDialog from '@/components/tasks/TaskFormDialog.vue';
-import { clientsRepo, tasksRepo, extractErrorMessage } from '@/lib/db';
+import CollaboratorSelect from '@/components/collaborators/CollaboratorSelect.vue';
+import { extractErrorMessage } from '@/lib/db';
 import { todayIso } from '@/lib/format';
-import { useAuthStore } from '@/stores/auth';
+import { useWorkspaceStore } from '@/stores/workspace';
 import type { Client, Task, TaskStatus } from '@/types/models';
 
-const auth = useAuthStore();
+// Di chi è la lavagna: la propria o, per l'admin, quella del collaboratore
+// scelto dal selettore — che l'admin può modificare come la sua.
+const ws = useWorkspaceStore();
 
 const loading = ref(true);
 const tasks = ref<Task[]>([]);
@@ -36,17 +39,29 @@ const clientNames = computed(() => new Map(clients.value.map((c) => [c.id, c.nam
 
 onMounted(load);
 
+// Cambio di spazio: si ricarica tutto, e il filtro torna a "tutti" perché
+// il cliente scelto può non esistere fra quelli del collaboratore.
+watch(
+  () => ws.key,
+  () => {
+    clientFilter.value = 'all';
+    void load();
+  },
+);
+
 async function load() {
+  const key = ws.key;
   loading.value = true;
   try {
-    [clients.value, tasks.value] = await Promise.all([
-      clientsRepo.list(auth.uid!),
-      tasksRepo.list(auth.uid!),
-    ]);
+    const [catalogs, list] = await Promise.all([ws.loadCatalogs(), ws.tasks.list(key)]);
+    // Lo spazio è cambiato mentre si caricava: questa risposta è vecchia.
+    if (key !== ws.key) return;
+    clients.value = catalogs.clients;
+    tasks.value = list;
   } catch (err) {
     toast.error('Impossibile caricare le attività', { description: extractErrorMessage(err) });
   } finally {
-    loading.value = false;
+    if (key === ws.key) loading.value = false;
   }
 }
 
@@ -175,7 +190,7 @@ async function onDrop(col: Column, target?: Task) {
     return newStatus !== task.status ? { ...t, order, status: newStatus, doneAt } : { ...t, order };
   });
   try {
-    await tasksRepo.reorder(auth.uid!, updates);
+    await ws.tasks.reorder(ws.key, updates);
   } catch (err) {
     toast.error("Impossibile spostare l'attività", { description: extractErrorMessage(err) });
     await load();
@@ -202,7 +217,7 @@ async function archive(t: Task) {
   const previous = tasks.value;
   tasks.value = tasks.value.map((x) => (x.id === t.id ? { ...x, archived: true, order } : x));
   try {
-    await tasksRepo.archive(auth.uid!, t.id, order);
+    await ws.tasks.archive(ws.key, t.id, order);
     toast.success('Attività archiviata', { description: `#${t.num} · ${t.title}` });
   } catch (err) {
     tasks.value = previous;
@@ -241,15 +256,18 @@ function cardClass(t: Task): string {
           dettaglio.
         </p>
       </div>
-      <Select v-model="clientFilter">
-        <SelectTrigger class="w-full sm:w-56" aria-label="Filtra per cliente">
-          <SelectValue placeholder="Tutti i clienti" />
-        </SelectTrigger>
-        <SelectContent>
-          <SelectItem value="all">Tutti i clienti</SelectItem>
-          <SelectItem v-for="c in clients" :key="c.id" :value="c.id">{{ c.name }}</SelectItem>
-        </SelectContent>
-      </Select>
+      <div class="flex w-full flex-wrap gap-2 sm:w-auto">
+        <CollaboratorSelect />
+        <Select v-model="clientFilter">
+          <SelectTrigger class="w-full sm:w-56" aria-label="Filtra per cliente">
+            <SelectValue placeholder="Tutti i clienti" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">Tutti i clienti</SelectItem>
+            <SelectItem v-for="c in clients" :key="c.id" :value="c.id">{{ c.name }}</SelectItem>
+          </SelectContent>
+        </Select>
+      </div>
     </div>
 
     <div v-if="loading" class="space-y-2">

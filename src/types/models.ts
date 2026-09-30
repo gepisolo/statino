@@ -117,6 +117,48 @@ export interface Task {
   statinoEntryId?: string | null;
 }
 
+// --- Collaboratori ----------------------------------------------------------
+
+// collaborators/{email} — top-level, una scheda per collaboratore (l'email
+// minuscola è l'id, come in allowedUsers). Il collaboratore lavora sui
+// clienti dell'admin ma non può leggerne le anagrafiche: un contratto porta
+// tariffa e monte ore, e le regole Firestore non nascondono singoli campi.
+// Per questo `clients` è una COPIA ripulita di ciò che gli è stato assegnato
+// (ed è anche l'elenco dei permessi: ciò che non c'è non lo vede), tenuta
+// allineata da `syncCollaborators` a ogni modifica delle anagrafiche.
+// Le sue ore e le sue attività stanno in collaborators/{email}/entries e
+// /tasks, con la stessa forma di Entry e Task.
+export interface CollaboratorContract {
+  id: string;
+  activity: string;
+  startDate: string; // YYYY-MM-DD inclusive
+  endDate: string; // YYYY-MM-DD inclusive
+}
+
+export interface CollaboratorProject {
+  id: string;
+  name: string;
+  active: boolean;
+  bgColor: string | null;
+  textColor: string | null;
+}
+
+export interface CollaboratorClient {
+  id: string;
+  name: string;
+  contracts: CollaboratorContract[];
+  projects: CollaboratorProject[];
+}
+
+export interface Collaborator {
+  email: string; // id del documento
+  name: string;
+  // false = accesso sospeso: non entra più, ma ore e attività restano.
+  active: boolean;
+  clients: CollaboratorClient[];
+  createdAt: string; // YYYY-MM-DD
+}
+
 // A discount applied at invoice creation: `amount` (€) is subtracted
 // from the billed hours×rate, `reason` says why.
 export interface InvoiceDiscount {

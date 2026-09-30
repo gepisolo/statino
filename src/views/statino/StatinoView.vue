@@ -28,17 +28,8 @@ import {
 } from '@/components/ui/dialog';
 import EntryFormDialog from '@/components/statino/EntryFormDialog.vue';
 import TaskFormDialog from '@/components/tasks/TaskFormDialog.vue';
-import {
-  clientsRepo,
-  contractsRepo,
-  entriesRepo,
-  fiscalYearsRepo,
-  invoicesRepo,
-  projectsRepo,
-  tasksRepo,
-  taxRatesRepo,
-  extractErrorMessage,
-} from '@/lib/db';
+import CollaboratorSelect from '@/components/collaborators/CollaboratorSelect.vue';
+import { fiscalYearsRepo, invoicesRepo, taxRatesRepo, extractErrorMessage } from '@/lib/db';
 import { exportStatinoPdf, type StatinoPdfMode } from '@/lib/pdf';
 import { badgeClass, badgeStyle } from '@/lib/colors';
 import { computeNet } from '@/lib/tax';
@@ -55,6 +46,7 @@ import {
   weekdayShortName,
 } from '@/lib/format';
 import { useAuthStore } from '@/stores/auth';
+import { useWorkspaceStore } from '@/stores/workspace';
 import type {
   Client,
   Contract,
@@ -67,6 +59,16 @@ import type {
 } from '@/types/models';
 
 const auth = useAuthStore();
+// Di chi è lo statino mostrato: il proprio o, per l'admin, quello del
+// collaboratore scelto dal selettore (in sola lettura).
+const ws = useWorkspaceStore();
+const readOnly = computed(() => ws.statinoReadOnly);
+// Nello spazio di un collaboratore non esistono tariffe, fatture né dati
+// fiscali: il pannello laterale si riduce alle ore.
+const showMoney = computed(() => !ws.isCollaboratorScope);
+const collaboratorName = computed(
+  () => ws.collaborators.find((c) => c.email === ws.selectedEmail)?.name ?? '',
+);
 
 const LAST_CLIENT_KEY = 'statino:lastClient';
 
@@ -114,7 +116,7 @@ async function openTicket(ticket: string) {
   if (num === null || taskLoading.value) return;
   taskLoading.value = true;
   try {
-    tasks.value ??= await tasksRepo.list(auth.uid!);
+    tasks.value ??= await ws.tasks.list(ws.key);
     const t = tasks.value.find((x) => x.num === num);
     if (!t) {
       toast.error(`Nessun ticket #${num} in Attività`);
@@ -144,49 +146,78 @@ const yearOptions = computed(() => {
 });
 const monthOptions = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12];
 
-onMounted(async () => {
+async function loadCatalogs() {
+  const key = ws.key;
+  loadingCatalogs.value = true;
   try {
-    [
-      clients.value,
-      contracts.value,
-      projects.value,
-      invoices.value,
-      fiscalYears.value,
-      taxRates.value,
-    ] = await Promise.all([
-      clientsRepo.list(auth.uid!),
-      contractsRepo.list(auth.uid!),
-      projectsRepo.list(auth.uid!),
-      invoicesRepo.list(auth.uid!),
-      fiscalYearsRepo.list(auth.uid!),
-      taxRatesRepo.list(auth.uid!),
+    // Fatture e dati fiscali sono solo del proprietario.
+    const own = !ws.isCollaboratorScope;
+    const [catalogs, inv, fy, tr] = await Promise.all([
+      ws.loadCatalogs(),
+      own ? invoicesRepo.list(auth.uid!) : [],
+      own ? fiscalYearsRepo.list(auth.uid!) : [],
+      own ? taxRatesRepo.list(auth.uid!) : [],
     ]);
+    // Lo spazio è cambiato mentre si caricava: questa risposta è vecchia.
+    if (key !== ws.key) return;
+    clients.value = catalogs.clients;
+    contracts.value = catalogs.contracts;
+    projects.value = catalogs.projects;
+    invoices.value = inv;
+    fiscalYears.value = fy;
+    taxRates.value = tr;
+    // I clienti di un collaboratore sono un sottoinsieme di quelli
+    // dell'admin, con gli stessi id: il cliente selezionato (o l'ultimo
+    // usato) resta valido passando da uno spazio all'altro, se c'è.
+    const has = (id: string | null) => Boolean(id) && clients.value.some((c) => c.id === id);
     const last = localStorage.getItem(LAST_CLIENT_KEY);
-    if (last && clients.value.some((c) => c.id === last)) {
-      clientId.value = last;
-    } else if (clients.value.length === 1) {
-      clientId.value = clients.value[0].id;
+    if (has(clientId.value)) {
+      // resta quello
+    } else if (has(last)) {
+      clientId.value = last!;
+    } else {
+      clientId.value = clients.value.length === 1 ? clients.value[0].id : '';
     }
   } catch (err) {
     toast.error('Impossibile caricare le anagrafiche', {
       description: extractErrorMessage(err),
     });
   } finally {
-    loadingCatalogs.value = false;
+    if (key === ws.key) loadingCatalogs.value = false;
   }
-  await loadEntries();
-});
+}
 
 async function loadEntries() {
+  const key = ws.key;
   loadingEntries.value = true;
   try {
-    entries.value = await entriesRepo.listYear(auth.uid!, year.value);
+    const list = await ws.entries.listYear(key, year.value);
+    if (key !== ws.key) return;
+    entries.value = list;
   } catch (err) {
     toast.error('Impossibile caricare le ore', { description: extractErrorMessage(err) });
   } finally {
-    loadingEntries.value = false;
+    if (key === ws.key) loadingEntries.value = false;
   }
 }
+
+async function loadAll() {
+  await loadCatalogs();
+  await loadEntries();
+}
+
+onMounted(loadAll);
+
+// Cambio di spazio (l'admin ha scelto un collaboratore, o è tornato ai
+// propri dati): niente di ciò che è in memoria vale più.
+watch(
+  () => ws.key,
+  () => {
+    tasks.value = null;
+    entries.value = [];
+    void loadAll();
+  },
+);
 
 watch(year, () => {
   void loadEntries();
@@ -417,7 +448,9 @@ const entryFormContracts = computed<Contract[]>(() => {
 function openAddEntry(dateIso: string) {
   if (!activeContractsFor(dateIso).length) {
     toast.info('Nessun contratto attivo in questa data', {
-      description: 'Crea prima un contratto valido per questo giorno.',
+      description: ws.isCollaboratorScope
+        ? 'Nessuno dei contratti assegnati copre questo giorno.'
+        : 'Crea prima un contratto valido per questo giorno.',
     });
     return;
   }
@@ -460,7 +493,7 @@ async function confirmDeleteEntry() {
   deleteSubmitting.value = true;
   const e = deleteTarget.value;
   try {
-    await entriesRepo.remove(auth.uid!, e.id);
+    await ws.entries.remove(ws.key, e.id);
     entries.value = entries.value.filter((x) => x.id !== e.id);
     toast.success('Attività eliminata');
     deleteOpen.value = false;
@@ -557,9 +590,15 @@ watch(loading, async (isLoading) => {
     <div class="flex flex-wrap items-end justify-between gap-4">
       <div>
         <h1 class="text-2xl font-semibold tracking-tight">Statino</h1>
-        <p class="text-sm text-muted-foreground">Ore giornaliere per cliente e contratto.</p>
+        <p class="text-sm text-muted-foreground">
+          <template v-if="readOnly">
+            Statino di {{ collaboratorName }}: sola lettura, le ore le inserisce il collaboratore.
+          </template>
+          <template v-else>Ore giornaliere per cliente e contratto.</template>
+        </p>
       </div>
       <div class="grid w-full grid-cols-2 gap-2 sm:flex sm:w-auto sm:flex-wrap sm:items-center">
+        <CollaboratorSelect class="col-span-2 sm:col-span-1" />
         <Select v-model="year">
           <SelectTrigger class="w-full sm:w-28">
             <SelectValue />
@@ -618,11 +657,16 @@ watch(loading, async (isLoading) => {
       v-else-if="!clients.length"
       class="rounded-lg border border-dashed p-10 text-center text-sm text-muted-foreground"
     >
-      Nessun cliente in anagrafica.
-      <RouterLink to="/clients" class="font-medium text-foreground underline">
-        Crea il primo cliente
-      </RouterLink>
-      per iniziare.
+      <template v-if="ws.isCollaboratorScope">
+        Nessun cliente assegnato{{ readOnly ? ' a questo collaboratore' : '' }}.
+      </template>
+      <template v-else>
+        Nessun cliente in anagrafica.
+        <RouterLink to="/clients" class="font-medium text-foreground underline">
+          Crea il primo cliente
+        </RouterLink>
+        per iniziare.
+      </template>
     </div>
 
     <div
@@ -714,6 +758,7 @@ watch(loading, async (isLoading) => {
                       aria-label="Attività fatturata"
                     />
                     <span
+                      v-if="!readOnly"
                       class="inline-flex transition-opacity pointer-fine:opacity-0 pointer-fine:group-focus-within:opacity-100 pointer-fine:group-hover:opacity-100"
                     >
                       <button
@@ -740,6 +785,7 @@ watch(loading, async (isLoading) => {
               </td>
               <td class="px-1 py-1 text-right align-top">
                 <button
+                  v-if="!readOnly"
                   class="rounded p-1 text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground pointer-coarse:p-2.5"
                   aria-label="Aggiungi attività"
                   @click="openAddEntry(day.iso)"
@@ -788,22 +834,24 @@ watch(loading, async (isLoading) => {
                 <span class="ml-auto text-sm tabular-nums">{{ formatHours(p.hours) }}</span>
               </li>
             </ul>
-            <div class="flex items-baseline justify-between">
-              <span class="text-sm text-muted-foreground">Importo</span>
-              <span class="text-xl font-semibold tabular-nums">
-                {{ formatEur(totalMonthAmount) }}
-              </span>
-            </div>
-            <div class="flex items-baseline justify-between">
-              <span class="text-sm text-muted-foreground">Netto previsto</span>
-              <span class="text-base font-medium tabular-nums">
-                {{ monthNet ? formatEur(monthNet.net) : '—' }}
-              </span>
-            </div>
+            <template v-if="showMoney">
+              <div class="flex items-baseline justify-between">
+                <span class="text-sm text-muted-foreground">Importo</span>
+                <span class="text-xl font-semibold tabular-nums">
+                  {{ formatEur(totalMonthAmount) }}
+                </span>
+              </div>
+              <div class="flex items-baseline justify-between">
+                <span class="text-sm text-muted-foreground">Netto previsto</span>
+                <span class="text-base font-medium tabular-nums">
+                  {{ monthNet ? formatEur(monthNet.net) : '—' }}
+                </span>
+              </div>
+            </template>
           </CardContent>
         </Card>
 
-        <Card>
+        <Card v-if="showMoney">
           <CardHeader>
             <CardTitle class="text-base"> Totali {{ monthName(month) }} {{ year }} </CardTitle>
           </CardHeader>
@@ -850,11 +898,11 @@ watch(loading, async (isLoading) => {
             >
               <div class="flex items-baseline justify-between gap-2">
                 <span class="text-sm font-medium">{{ s.contract.activity }}</span>
-                <span class="text-xs text-muted-foreground">
+                <span v-if="showMoney" class="text-xs text-muted-foreground">
                   {{ formatEur(s.contract.hourlyRate) }}/h
                 </span>
               </div>
-              <div class="h-1.5 overflow-hidden rounded-full bg-secondary">
+              <div v-if="showMoney" class="h-1.5 overflow-hidden rounded-full bg-secondary">
                 <div
                   class="h-full rounded-full"
                   :class="s.remaining < 0 ? 'bg-destructive' : 'bg-primary'"
@@ -864,7 +912,7 @@ watch(loading, async (isLoading) => {
                 />
               </div>
               <dl class="grid grid-cols-2 gap-x-4 gap-y-0.5 text-xs">
-                <div class="flex justify-between">
+                <div v-if="showMoney" class="flex justify-between">
                   <dt class="text-muted-foreground">Annuali</dt>
                   <dd class="tabular-nums">{{ formatHours(s.contract.annualHours) }}</dd>
                 </div>
@@ -876,7 +924,7 @@ watch(loading, async (isLoading) => {
                   <dt class="text-muted-foreground">Nel mese</dt>
                   <dd class="tabular-nums">{{ formatHours(s.monthHours) }}</dd>
                 </div>
-                <div class="flex justify-between">
+                <div v-if="showMoney" class="flex justify-between">
                   <dt class="text-muted-foreground">Residue</dt>
                   <dd
                     class="font-medium tabular-nums"
@@ -890,7 +938,7 @@ watch(loading, async (isLoading) => {
           </CardContent>
         </Card>
 
-        <Card>
+        <Card v-if="showMoney">
           <CardHeader>
             <CardTitle class="text-base">{{ clientName }} — anno {{ year }}</CardTitle>
           </CardHeader>
@@ -925,7 +973,7 @@ watch(loading, async (isLoading) => {
           </CardContent>
         </Card>
 
-        <Card>
+        <Card v-if="showMoney">
           <CardHeader>
             <CardTitle class="text-base">Tutti i clienti — anno {{ year }}</CardTitle>
           </CardHeader>
@@ -957,7 +1005,7 @@ watch(loading, async (isLoading) => {
     </div>
 
     <button
-      v-if="!loading && clientId && viewingCurrentMonth"
+      v-if="!loading && clientId && viewingCurrentMonth && !readOnly"
       class="fixed bottom-[max(1.25rem,env(safe-area-inset-bottom))] right-4 z-30 flex size-14 items-center justify-center rounded-full bg-primary text-primary-foreground shadow-lg transition-transform active:scale-95 md:hidden"
       aria-label="Aggiungi attività per oggi"
       @click="openAddEntry(todayIso())"

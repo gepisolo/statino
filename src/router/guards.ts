@@ -24,6 +24,12 @@ export function installAuthGuard(router: Router): void {
     if (to.meta.admin && !auth.isAdmin) {
       return { path: '/' };
     }
+    // Un collaboratore raggiunge solo le rotte marcate `collab` (Statino e
+    // Attività). È una cortesia di navigazione: il resto glielo negano
+    // comunque le regole Firestore.
+    if (auth.isCollaborator && !to.meta.collab) {
+      return { path: '/' };
+    }
     return true;
   });
 }

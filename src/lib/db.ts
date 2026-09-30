@@ -4,6 +4,7 @@ import {
   deleteDoc,
   deleteField,
   doc,
+  getDoc,
   getDocs,
   limit,
   query,
@@ -12,10 +13,13 @@ import {
   where,
   writeBatch,
 } from 'firebase/firestore';
-import { db } from '@/lib/firebase';
+import { db, firebaseAuth } from '@/lib/firebase';
+import { ADMIN_EMAIL } from '@/lib/config';
+import { buildCollaboratorClients, grantsOf } from '@/lib/collaborators';
 import { todayIso } from '@/lib/format';
 import type {
   Client,
+  Collaborator,
   Contract,
   Entry,
   FiscalYear,
@@ -34,9 +38,19 @@ import type {
 // equivalent of earsup's "components call http directly" convention.
 // Sorting happens client-side: volumes are tiny and it avoids composite
 // indexes.
+//
+// `base` è la collection radice: 'users' (chiave = uid) per i dati del
+// proprietario, 'collaborators' (chiave = email) per ore e attività di un
+// collaboratore. Il parametro resta chiamato `uid` perché è il caso normale.
 
-function makeRepo<T extends { id: string }>(name: string, sort: (a: T, b: T) => number) {
-  const col = (uid: string) => collection(db, 'users', uid, name);
+type Base = 'users' | 'collaborators';
+
+function makeRepo<T extends { id: string }>(
+  name: string,
+  sort: (a: T, b: T) => number,
+  base: Base = 'users',
+) {
+  const col = (uid: string) => collection(db, base, uid, name);
   return {
     async list(uid: string): Promise<T[]> {
       const snap = await getDocs(col(uid));
@@ -47,17 +61,41 @@ function makeRepo<T extends { id: string }>(name: string, sort: (a: T, b: T) => 
       return { id: ref.id, ...data } as T;
     },
     async update(uid: string, id: string, data: Omit<T, 'id'>): Promise<T> {
-      await setDoc(doc(db, 'users', uid, name, id), data);
+      await setDoc(doc(db, base, uid, name, id), data);
       return { id, ...data } as T;
     },
     async remove(uid: string, id: string): Promise<void> {
-      await deleteDoc(doc(db, 'users', uid, name, id));
+      await deleteDoc(doc(db, base, uid, name, id));
+    },
+  };
+}
+
+type Repo<T extends { id: string }> = ReturnType<typeof makeRepo<T>>;
+
+// Le anagrafiche da cui sono copiate le schede dei collaboratori: ogni
+// scrittura riallinea le copie (vedi `syncCollaborators`).
+function synced<T extends { id: string }>(repo: Repo<T>): Repo<T> {
+  return {
+    list: repo.list,
+    async create(uid, data) {
+      const saved = await repo.create(uid, data);
+      await syncCollaborators(uid);
+      return saved;
+    },
+    async update(uid, id, data) {
+      const saved = await repo.update(uid, id, data);
+      await syncCollaborators(uid);
+      return saved;
+    },
+    async remove(uid, id) {
+      await repo.remove(uid, id);
+      await syncCollaborators(uid);
     },
   };
 }
 
 export const clientsRepo = {
-  ...makeRepo<Client>('clients', (a, b) => a.name.localeCompare(b.name)),
+  ...synced(makeRepo<Client>('clients', (a, b) => a.name.localeCompare(b.name))),
   // Deleting a client (only allowed when it has no statino hours) also
   // drops its contracts and projects: without the client they would be
   // unreachable orphans.
@@ -72,55 +110,64 @@ export const clientsRepo = {
     }
     batch.delete(doc(db, 'users', uid, 'clients', id));
     await batch.commit();
+    await syncCollaborators(uid);
   },
 };
 
-export const projectsRepo = makeRepo<Project>('projects', (a, b) => a.name.localeCompare(b.name));
+export const projectsRepo = synced(
+  makeRepo<Project>('projects', (a, b) => a.name.localeCompare(b.name)),
+);
 
 // Newest first: recent contracts are the ones being worked against.
-export const contractsRepo = makeRepo<Contract>('contracts', (a, b) =>
-  b.startDate.localeCompare(a.startDate),
+export const contractsRepo = synced(
+  makeRepo<Contract>('contracts', (a, b) => b.startDate.localeCompare(a.startDate)),
 );
 
 // Entries are loaded a calendar year at a time (single-field range query,
 // no composite index): the statino view needs the whole year anyway to
 // compute per-contract progress against the annual allowance.
-export const entriesRepo = {
-  ...makeRepo<Entry>('entries', (a, b) => a.date.localeCompare(b.date)),
-  async listRange(uid: string, from: string, to: string): Promise<Entry[]> {
-    const snap = await getDocs(
-      query(
-        collection(db, 'users', uid, 'entries'),
-        where('date', '>=', from),
-        where('date', '<=', to),
-      ),
-    );
-    return snap.docs
-      .map((d) => ({ id: d.id, ...d.data() }) as Entry)
-      .sort((a, b) => a.date.localeCompare(b.date));
-  },
-  async listYear(uid: string, year: number): Promise<Entry[]> {
-    return this.listRange(uid, `${year}-01-01`, `${year}-12-31`);
-  },
-  // The entries billed by an invoice: the FIC dialog needs them to build
-  // the document's lines.
-  async listByInvoice(uid: string, invoiceId: string): Promise<Entry[]> {
-    const snap = await getDocs(
-      query(collection(db, 'users', uid, 'entries'), where('invoiceId', '==', invoiceId)),
-    );
-    return snap.docs
-      .map((d) => ({ id: d.id, ...d.data() }) as Entry)
-      .sort((a, b) => a.date.localeCompare(b.date));
-  },
-  // Guard for client deletion: any hour logged for the client, in any
-  // year, blocks it.
-  async existsForClient(uid: string, clientId: string): Promise<boolean> {
-    const snap = await getDocs(
-      query(collection(db, 'users', uid, 'entries'), where('clientId', '==', clientId), limit(1)),
-    );
-    return !snap.empty;
-  },
-};
+function makeEntriesRepo(base: Base) {
+  return {
+    ...makeRepo<Entry>('entries', (a, b) => a.date.localeCompare(b.date), base),
+    async listRange(uid: string, from: string, to: string): Promise<Entry[]> {
+      const snap = await getDocs(
+        query(
+          collection(db, base, uid, 'entries'),
+          where('date', '>=', from),
+          where('date', '<=', to),
+        ),
+      );
+      return snap.docs
+        .map((d) => ({ id: d.id, ...d.data() }) as Entry)
+        .sort((a, b) => a.date.localeCompare(b.date));
+    },
+    async listYear(uid: string, year: number): Promise<Entry[]> {
+      return this.listRange(uid, `${year}-01-01`, `${year}-12-31`);
+    },
+    // The entries billed by an invoice: the FIC dialog needs them to build
+    // the document's lines.
+    async listByInvoice(uid: string, invoiceId: string): Promise<Entry[]> {
+      const snap = await getDocs(
+        query(collection(db, base, uid, 'entries'), where('invoiceId', '==', invoiceId)),
+      );
+      return snap.docs
+        .map((d) => ({ id: d.id, ...d.data() }) as Entry)
+        .sort((a, b) => a.date.localeCompare(b.date));
+    },
+    // Guard for client deletion: any hour logged for the client, in any
+    // year, blocks it.
+    async existsForClient(uid: string, clientId: string): Promise<boolean> {
+      const snap = await getDocs(
+        query(collection(db, base, uid, 'entries'), where('clientId', '==', clientId), limit(1)),
+      );
+      return !snap.empty;
+    },
+  };
+}
+
+export const entriesRepo = makeEntriesRepo('users');
+export const collabEntriesRepo = makeEntriesRepo('collaborators');
+export type EntriesRepo = typeof entriesRepo;
 
 // Creating an invoice locks the billed entries (sets their `invoiceId`);
 // deleting it unlocks them. Both run in a single atomic batch.
@@ -172,28 +219,34 @@ export const invoicesRepo = {
 // Kanban tasks, sorted by manual position. A drop rewrites the whole
 // target column's orders (and possibly the moved task's status) in one
 // batch: volumes are tiny.
-export const tasksRepo = {
-  ...makeRepo<Task>('tasks', (a, b) => a.order - b.order),
-  // One-click archiving from the board: only the flag and the position
-  // in the archive change — the done outcome (and its doneAt) stay put.
-  async archive(uid: string, id: string, order: number): Promise<void> {
-    await updateDoc(doc(db, 'users', uid, 'tasks', id), { archived: true, order });
-  },
-  async reorder(
-    uid: string,
-    updates: { id: string; order: number; status?: TaskStatus; doneAt?: string | null }[],
-  ): Promise<void> {
-    const batch = writeBatch(db);
-    for (const u of updates) {
-      batch.update(doc(db, 'users', uid, 'tasks', u.id), {
-        order: u.order,
-        ...(u.status !== undefined ? { status: u.status } : {}),
-        ...(u.doneAt !== undefined ? { doneAt: u.doneAt } : {}),
-      });
-    }
-    await batch.commit();
-  },
-};
+function makeTasksRepo(base: Base) {
+  return {
+    ...makeRepo<Task>('tasks', (a, b) => a.order - b.order, base),
+    // One-click archiving from the board: only the flag and the position
+    // in the archive change — the done outcome (and its doneAt) stay put.
+    async archive(uid: string, id: string, order: number): Promise<void> {
+      await updateDoc(doc(db, base, uid, 'tasks', id), { archived: true, order });
+    },
+    async reorder(
+      uid: string,
+      updates: { id: string; order: number; status?: TaskStatus; doneAt?: string | null }[],
+    ): Promise<void> {
+      const batch = writeBatch(db);
+      for (const u of updates) {
+        batch.update(doc(db, base, uid, 'tasks', u.id), {
+          order: u.order,
+          ...(u.status !== undefined ? { status: u.status } : {}),
+          ...(u.doneAt !== undefined ? { doneAt: u.doneAt } : {}),
+        });
+      }
+      await batch.commit();
+    },
+  };
+}
+
+export const tasksRepo = makeTasksRepo('users');
+export const collabTasksRepo = makeTasksRepo('collaborators');
+export type TasksRepo = typeof tasksRepo;
 
 // Connettori verso gestionali esterni: una riga per connettore, così si
 // possono avere due account dello stesso provider. Gli access token stanno
@@ -230,6 +283,69 @@ export const taxRatesRepo = makeRepo<TaxRate>(
   'taxRates',
   (a, b) => b.year - a.year || a.fromIncome - b.fromIncome,
 );
+
+// Schede dei collaboratori: top-level, chiave = email minuscola. Solo
+// l'admin le elenca e le scrive; il collaboratore legge la propria.
+export const collaboratorsRepo = {
+  async list(): Promise<Collaborator[]> {
+    const snap = await getDocs(collection(db, 'collaborators'));
+    return snap.docs
+      .map((d) => ({ email: d.id, ...d.data() }) as Collaborator)
+      .sort((a, b) => a.name.localeCompare(b.name));
+  },
+  async get(email: string): Promise<Collaborator | null> {
+    const snap = await getDoc(doc(db, 'collaborators', email));
+    return snap.exists() ? ({ email: snap.id, ...snap.data() } as Collaborator) : null;
+  },
+  async save(c: Collaborator): Promise<Collaborator> {
+    const { email, ...data } = c;
+    await setDoc(doc(db, 'collaborators', email), data);
+    return c;
+  },
+  // Elimina la scheda CON le sue ore e le sue attività: senza la scheda
+  // resterebbero sottocollezioni orfane che nessuna schermata raggiunge.
+  async removeCascade(email: string): Promise<void> {
+    const [entries, tasks] = await Promise.all([
+      getDocs(collection(db, 'collaborators', email, 'entries')),
+      getDocs(collection(db, 'collaborators', email, 'tasks')),
+    ]);
+    const refs = [...entries.docs, ...tasks.docs].map((d) => d.ref);
+    // Un batch regge 500 scritture: uno statino di qualche anno le supera.
+    for (let i = 0; i < refs.length; i += 400) {
+      const batch = writeBatch(db);
+      for (const ref of refs.slice(i, i + 400)) batch.delete(ref);
+      await batch.commit();
+    }
+    await deleteDoc(doc(db, 'collaborators', email));
+  },
+};
+
+// Riallinea le copie di clienti, contratti e progetti sulle schede dei
+// collaboratori dopo una modifica alle anagrafiche (cliente rinominato,
+// date di un contratto spostate, progetto aggiunto o disattivato…).
+// I collaboratori sono solo dell'admin: per chiunque altro non c'è nulla da
+// fare (e le regole negherebbero la lettura). Un errore qui non deve far
+// fallire il salvataggio che l'ha innescato: la copia si riallinea alla
+// modifica successiva, o riaprendo e salvando la scheda del collaboratore.
+export async function syncCollaborators(uid: string): Promise<void> {
+  if (firebaseAuth.currentUser?.email?.toLowerCase() !== ADMIN_EMAIL) return;
+  try {
+    const collaborators = await collaboratorsRepo.list();
+    if (!collaborators.length) return;
+    const [clients, contracts, projects] = await Promise.all([
+      clientsRepo.list(uid),
+      contractsRepo.list(uid),
+      projectsRepo.list(uid),
+    ]);
+    for (const c of collaborators) {
+      const next = buildCollaboratorClients(grantsOf(c), clients, contracts, projects);
+      if (JSON.stringify(next) === JSON.stringify(c.clients)) continue;
+      await updateDoc(doc(db, 'collaborators', c.email), { clients: next });
+    }
+  } catch (err) {
+    console.error('Riallineamento dei collaboratori non riuscito', err);
+  }
+}
 
 export function extractErrorMessage(err: unknown): string {
   return err instanceof Error ? err.message : String(err);

@@ -13,6 +13,13 @@ consultant who logs worked hours per client against yearly contracts.
 The invite allowlist exists purely as access protection, not as a
 multi-user ambition — "solo io, per sempre" (confirmed 2026-07-26).
 
+Since 2026-09-30 a **collaborator** also logs in: someone working for the
+owner on the owner's clients. It is a restricted guest, not a second
+tenant — only Statino and Attività, only the clients and contracts the
+owner assigned, never rates or amounts. The owner follows the
+collaborator's board (and can edit it) and reads the collaborator's
+statino without writing in it.
+
 Usage scenes (confirmed): primary entry happens at the desktop at the
 end of the day; the owner also uses it from the phone (mobile web), so
 the UI must stay workable on small screens, not desktop-only.

@@ -32,6 +32,41 @@ service cloud.firestore {
       allow read, write: if isAllowed() && request.auth.uid == uid;
     }
 
+    // Collaboratori: lavorano sui clienti dell'admin, ma NON hanno accesso
+    // a users/{uid}/… (non stanno in allowedUsers). Tutto ciò che possono
+    // toccare è qui: la propria scheda in lettura — che porta una copia
+    // ripulita di clienti e contratti assegnati, senza tariffe — e le
+    // proprie ore e attività. `active: false` sospende l'accesso senza
+    // cancellare nulla.
+    function isCollaboratorEmail(email) {
+      return signedIn()
+        && request.auth.token.email_verified
+        && request.auth.token.email == email;
+    }
+
+    function isActiveCollaborator(email) {
+      return isCollaboratorEmail(email)
+        && get(/databases/$(database)/documents/collaborators/$(email)).data.active == true;
+    }
+
+    match /collaborators/{email} {
+      allow get: if isAdmin()
+        || (isCollaboratorEmail(email) && resource != null && resource.data.active == true);
+      allow list, write: if isAdmin();
+
+      // Lo statino lo scrive solo chi ha fatto le ore: l'admin lo legge (e
+      // lo esporta), e può cancellarlo solo eliminando il collaboratore.
+      match /entries/{entryId} {
+        allow read, delete: if isAdmin() || isActiveCollaborator(email);
+        allow create, update: if isActiveCollaborator(email);
+      }
+
+      // Le attività le gestiscono entrambi: l'admin le assegna e le segue.
+      match /tasks/{taskId} {
+        allow read, write: if isAdmin() || isActiveCollaborator(email);
+      }
+    }
+
     // Token Fatture in Cloud (non scade mai). Scritto dall'app quando lo si
     // configura, letto SOLO dalla Cloud Function con l'Admin SDK, che le
     // regole non le applica. Non può stare sotto users/{uid}/…: lì il

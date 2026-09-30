@@ -20,9 +20,9 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
-import { entriesRepo, extractErrorMessage } from '@/lib/db';
+import { extractErrorMessage } from '@/lib/db';
 import { formatDate, weekdayName } from '@/lib/format';
-import { useAuthStore } from '@/stores/auth';
+import { useWorkspaceStore } from '@/stores/workspace';
 import type { Contract, Entry, Project } from '@/types/models';
 
 type Mode = 'create' | 'edit';
@@ -47,7 +47,9 @@ const emit = defineEmits<{
   (e: 'saved', entry: Entry): void;
 }>();
 
-const auth = useAuthStore();
+// Le ore finiscono nello spazio corrente: il proprio o, per un
+// collaboratore, il suo statino.
+const ws = useWorkspaceStore();
 
 const NO_PROJECT = 'none';
 
@@ -125,8 +127,8 @@ async function submit() {
     };
     const saved =
       props.mode === 'create'
-        ? await entriesRepo.create(auth.uid!, data)
-        : await entriesRepo.update(auth.uid!, props.entry!.id, data);
+        ? await ws.entries.create(ws.key, data)
+        : await ws.entries.update(ws.key, props.entry!.id, data);
     toast.success(props.mode === 'create' ? 'Attività aggiunta' : 'Attività aggiornata');
     emit('saved', saved);
     emit('update:open', false);
