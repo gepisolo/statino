@@ -43,7 +43,9 @@ onMounted(load);
 // il cliente scelto può non esistere fra quelli del collaboratore.
 watch(
   () => ws.key,
-  () => {
+  (key) => {
+    // Chiave vuota = logout in corso: non c'è nulla da ricaricare.
+    if (!key) return;
     clientFilter.value = 'all';
     void load();
   },

@@ -4,7 +4,7 @@ Personal timesheet app ("statino") replacing an Excel sheet: hours logged
 per day, per client, against yearly contracts. Single user (Google login),
 data on Firestore. UI language: Italian.
 
-## Status (2026-09-30, v0.39.0)
+## Status (2026-09-30, v0.39.1)
 
 **Done and deployed** to https://statino-gepisolo.web.app (CI green):
 
@@ -285,6 +285,13 @@ data on Firestore. UI language: Italian.
     casi: il collaboratore non legge `users/…`, né le schede altrui, né
     scrive la propria; sospeso o con email non verificata non passa). Java 11
     basta con `firebase-tools@13`; le versioni nuove vogliono Java 21.
+  - Menu intero per un istante al logout del collaboratore (v0.39.1):
+    `onAuthStateChanged` azzera `auth.role` prima che `window.location`
+    cambi pagina, e la nav era scritta "tutto tranne che per il
+    collaboratore". Ora le voci del proprietario compaiono solo con ruolo
+    `admin`/`user`; per lo stesso motivo i watch su `ws.key` ignorano la
+    chiave vuota (avrebbero ricaricato con `uid` nullo). Era solo un
+    difetto visivo: i dati restano chiusi dalle regole.
   - Non fatto, per scelta: le ore del collaboratore non entrano nelle tue
     fatture né nelle statistiche — sono uno statino a parte.
 

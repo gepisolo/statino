@@ -40,8 +40,11 @@ interface NavGroup {
 const nav = computed<(NavLink | NavGroup)[]>(() => [
   { name: 'statino', label: 'Statino', to: '/', icon: CalendarDays },
   { name: 'tasks', label: 'Attività', to: '/tasks', icon: ListTodo },
-  // Un collaboratore si ferma qui (le stesse rotte marcate `collab`).
-  ...(auth.isCollaborator ? [] : ownerNav.value),
+  // Un collaboratore si ferma qui (le stesse rotte marcate `collab`). Il
+  // resto compare solo con un ruolo che lo prevede, non "se non è un
+  // collaboratore": al logout il ruolo si azzera un istante prima che la
+  // pagina cambi, e l'altra forma mostrava per un attimo il menu intero.
+  ...(auth.role === 'admin' || auth.role === 'user' ? ownerNav.value : []),
 ]);
 
 const ownerNav = computed<(NavLink | NavGroup)[]>(() => [

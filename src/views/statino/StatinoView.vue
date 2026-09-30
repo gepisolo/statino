@@ -212,7 +212,9 @@ onMounted(loadAll);
 // propri dati): niente di ciò che è in memoria vale più.
 watch(
   () => ws.key,
-  () => {
+  (key) => {
+    // Chiave vuota = logout in corso: non c'è nulla da ricaricare.
+    if (!key) return;
     tasks.value = null;
     entries.value = [];
     void loadAll();
